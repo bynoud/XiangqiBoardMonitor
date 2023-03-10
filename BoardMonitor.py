@@ -2,21 +2,24 @@ import numpy as np
 import cv2
 import pyautogui
 import threading
+import re
+from enum import Enum
+from abc import ABC, abstractmethod
 from PIL import ImageGrab
 from imutils.object_detection import non_max_suppression
 from timeit import default_timer as timer
 
-from typing import Dict
+from typing import Dict, List, Literal
 
 PATTERN_SCALE = 1 # reduce image size for faster processing
 BORDER_THRESH = 0.8 # if nor scaling, 0.8 is enough. must try to get this right
 PIECE_THRESH = 0.8
+LASTMOVE_THRESH = 0.7
 
 PATTERN_PATH = './patterns'
 GRID_WIDTH = 9
 GRID_HEIGHT = 10
 PIECE_NAME = 'King Advisor Elephant Rook Cannon Horse Pawn'.split()
-PIECE_SIDE = 'Black White'.split()
 
 PIECE_SYMBOL = {
     'King': 'K',
@@ -27,6 +30,12 @@ PIECE_SYMBOL = {
     'Horse': 'N',
     'Pawn': 'P'
 }
+
+MOVE_PTN = re.compile(r'([a-z])(\d+)([a-z])(\d+)')
+
+FILE2NUM = dict(a=1,b=2,c=3,d=4,e=5,f=6,g=7,h=8,i=9)
+
+
 
 def load_gray(fileName):
     img = cv2.imread(f'{PATTERN_PATH}/{fileName}.png', 0)
@@ -151,14 +160,42 @@ def screen_cap(region=None):
 def create_mask(img_rgb):
     return np.array(np.array([ [0 if y.sum() < 10 else 255 for y in x] for x in img_rgb ])).astype(np.uint8)
 
+class Side(Enum):
+    Unknow = 0
+    White = 1
+    Black = 2
+
+    @property
+    def opponent(self):
+        if self == Side.Unknow:
+            return Side.Unknow
+        if self == Side.Black:
+            return Side.White
+        return Side.Black
+    
+    @property
+    def fen(self):
+        if self == Side.White:
+            return 'w'
+        if self == Side.Black:
+            return 'b'
+        raise Exception('should not be called')
+
+class BoardMonitorListener(ABC):
+    @abstractmethod
+    def on_monitor_error(self, msg: str):
+        pass
+    @abstractmethod
+    def on_board_updated(self, fen: str, moveSide: Side, lastmovePosition):
+        pass
 
 class PiecePattern:
-    def __init__(self, side, name) -> None:
+    def __init__(self, side: Side, name: str) -> None:
         self.side = side
         self.name = name
-        self.fullName = f'{side}{name}'
+        self.fullName = f'{side.name}{name}'
         self.symbol = PIECE_SYMBOL[name]
-        if side=='Black':
+        if side==Side.Black:
             self.symbol = self.symbol.lower()
         self.gray = load_gray(self.fullName)
 
@@ -180,26 +217,31 @@ class BoardMonitor:
     lastBoardStr = ''
     lastScanRegion = None
 
-    mySide = 'White'
-    lastMoveSide = 'Unknown'
+    mySide = Side.White
+    lastMoveSide = Side.Unknow
     lastMovePosition = None
+    forceNextSide = Side.Unknow
 
-    eventListeners = []
+    eventListeners: List[BoardMonitorListener] = []
     stopPolling = False
     pollingStopped = threading.Event()
     engine_thread = None
 
+    
+
     def __init__(self) -> None:
         self.clear_board()
-        for side in PIECE_SIDE:
+        for side in [Side.Black, Side.White]:
             for name in PIECE_NAME:
                 p = PiecePattern(side,name)
                 self.piecePatterns[p.fullName] = p
-        # ptn_rgb = cv2.imread(f'{PATTERN_PATH}/lastMove.png')
-        # self.lastMovePatternMsk = create_mask(ptn_rgb)
-        # self.lastMovePatternGray = cv2.cvtColor(np.array(ptn_rgb), cv2.COLOR_BGR2GRAY)
+        
+        # maybe this help speedup pattern matching
+        self.patternOffset = [[np.multiply(self.gridSize, (i,j)) + self.playStart - np.divide(self.gridSize,2)
+                               for i in range(GRID_WIDTH)] for j in range(GRID_HEIGHT)] # [Y,X]
 
-    def add_event_listener(self, listener):
+
+    def add_event_listener(self, listener: BoardMonitorListener):
         self.eventListeners.append(listener)
 
     def clear_board(self):
@@ -240,9 +282,10 @@ class BoardMonitor:
         return np.round((coord - self.playStart) / self.gridSize).astype(int)
 
     def scan_lastmove(self, board_gray, display=0):
-        coord = find_pattern(board_gray, self.lastMovePatternGray, thresh=PIECE_THRESH,
+        coord = find_pattern(board_gray, self.lastMovePatternGray, thresh=LASTMOVE_THRESH,
                             mask=self.lastMovePatternMsk, center=1, display=display)
         if len(coord)==0:
+            # self.send_msg('** Error: Last move position not found')
             return None
         coord = coord[0]
         return np.round((coord - self.playStart) / self.gridSize).astype(int)
@@ -259,21 +302,73 @@ class BoardMonitor:
         if (self.idleCnt[msg] > 10):
             self.idleCnt[msg] = 0
 
-    def send_board_update_event(self):
-        newBoard = self.get_fen()
-        nextSide = 'Black' if self.lastMoveSide=='White' else 'White'
-        if newBoard != self.lastBoardStr:
+    def send_board_update_event(self, fen: str, moveSide: Side):
+        # print(f'board {fen} {moveSide}')
+        # print(f'      {self.lastBoardStr} {self.lastMoveSide}')
+        if moveSide == Side.Unknow and self.forceNextSide != Side.Unknow:
+            moveSide = self.forceNextSide.opponent
+            print(f'** Warning: Force moveside {moveSide}')
+        self.forceNextSide = Side.Unknow
+        if fen != self.lastBoardStr or moveSide != self.lastMoveSide:
             # print(self.board_str())
             for l in self.eventListeners:
-                l.on_board_updated(newBoard, nextSide)
-        self.lastBoardStr = newBoard
+                l.on_board_updated(fen, moveSide, self.lastMovePosition)
+        self.lastBoardStr = fen
+        self.lastMoveSide = moveSide
 
+    # a little bit faster, but still slow thouigh...
     def scan_image(self, board_gray):
         board = self.crop_image(board_gray)
         self.clear_board()
 
         if board is None:
-            self.send_msg("** Error : Cannot find the board. Check the screen")
+            self.send_msg("** Error : No Board found.")
+            self.lastBoardStr = ''
+            return
+
+        self.lastMovePosition = self.scan_lastmove(board)
+        moveSide = Side.Unknow
+        kingPos = {Side.Black: None, Side.White: None}
+
+        for row in range(GRID_HEIGHT):
+            for col in range(GRID_WIDTH):
+                ptnOffs = self.patternOffset[row][col]
+                s = ptnOffs.astype(int)
+                e = (ptnOffs + self.gridSize).astype(int)
+                boardLoc = board[ s[1]:e[1], s[0]:e[0] ]
+                for _, piece in self.piecePatterns.items():
+                    res = find_pattern(boardLoc, piece.gray, thresh=PIECE_THRESH)
+                    if len(res) > 0:
+                        # found here
+                        if np.array_equal(self.lastMovePosition, (col,row)):
+                            moveSide = piece.side
+                        curp = self.positions[row][col]
+                        if (curp != '.'):
+                            print(f'** Error: Duplicated piece found at {row}:{col} {curp} -> {piece.symbol}')
+                        self.positions[row][col] = piece.symbol
+                        if piece.name == 'King':
+                            kingPos[piece.side] = (col,row)
+                        break
+
+        if kingPos[Side.Black] is None or kingPos[Side.White] is None:
+            print(f'** Error: KING is not found in both sides')
+            return
+        
+        self.mySide = Side.White if kingPos[Side.White][1] > kingPos[Side.Black][1] else Side.Black
+        # if self.lastMoveSide == 'Unknown':
+        #     self.send_msg(f'** Error: move side unkown, assum my side move')
+        #     self.lastMoveSide = self.mySide
+
+        self.send_board_update_event(self.get_fen(), moveSide)
+
+
+    def scan_image_full(self, board_gray):
+        board = self.crop_image(board_gray)
+        self.clear_board()
+
+        if board is None:
+            self.send_msg("** Error : No Board found.")
+            self.lastBoardStr = ''
             return
 
         self.lastMovePosition = self.scan_lastmove(board)
@@ -298,6 +393,9 @@ class BoardMonitor:
             return
         
         self.mySide = 'White' if kingPos['White'][1] > kingPos['Black'][1] else 'Black'
+        # if self.lastMoveSide == 'Unknown':
+        #     print(f'** Error: move side unkown, assum my side move turn')
+        #     self.lastMoveSide = self.mySide
 
         self.send_board_update_event()
 
@@ -311,7 +409,7 @@ class BoardMonitor:
     def get_fen(self):
         # Start for highest rank
         fens = []
-        rotate = self.mySide=='Black'
+        rotate = self.mySide==Side.Black
         def addfen(fen, sym):
             spaceSym = f'{"" if spacecnt==0 else spacecnt}'
             if rotate:
@@ -336,6 +434,14 @@ class BoardMonitor:
             fen = addfen(fen, '')
         return f'{"/".join(fens)}'
 
+    def move_parse(self, mv):
+        m = MOVE_PTN.match(mv)
+        sx, sy = FILE2NUM[m.group(1)], int(m.group(2))
+        ex, ey = FILE2NUM[m.group(3)], int(m.group(4))
+        if self.mySide==Side.Black:
+            return ( (GRID_WIDTH-sx, sy-1), (GRID_WIDTH-ex, ey-1) )
+        else:
+            return ( (sx-1, GRID_HEIGHT-sy), (ex-1, GRID_HEIGHT-ey) )
 
     def screen_check(self):
         # start = timer()
@@ -344,7 +450,7 @@ class BoardMonitor:
         # end = timer()
         # print(end-start)
 
-    def start(self, delaySecond=0.3):
+    def start(self, delaySecond=0.1):
         self.stop()
 
         def polling():

@@ -1,9 +1,10 @@
-from typing import List
-from abc import ABC, abstractmethod
 import tkinter as tk
 import tkinter.scrolledtext as tkst
 import queue
 from enum import Enum
+
+from FairyfishUCIAdapter import Engine, EngineEventListener
+from BoardMonitor import BoardMonitor, BoardMonitorListener, Side
 
 DEFAULT_SIZE = 40
 GRID_HEIGHT = 10
@@ -55,33 +56,63 @@ class GUIAction:
         self.action = action
         self.params = params
 
-class GUIEventType(Enum):
-    ForceMySideNextMove = 0
-    SetMoveTime = 1
-
-class HelperGUIListener:
-    @abstractmethod
-    def on_gui_event(self, action: GUIEventType, params = None):
-        pass
-
-class HelperGUI:
+class XiangqiHelper(EngineEventListener, BoardMonitorListener):
 
     def __init__(self, gridsize=DEFAULT_SIZE) -> None:
         self.gridsize = gridsize
+        self.help = True
+        self.debugDepth = 8
+        self.guiUpdateAction = queue.Queue()
+        self.guiUpdaterId = None
+        self.restartCount = 5
+
+        self.build_gui()
+
+    def start(self):
+        self.restart_engine()
+        self.loop()
+        print('GUI exited')
+        self.stop_engine()
+
+    def stop_engine(self):
+        try:
+            self.engine.quit()
+        except:
+            pass
+        try:
+            self.monitor.stop()
+        except:
+            pass
+
+    def restart_engine(self):
+        try:
+            self.stop_engine()
+            self.lastFen = ''
+            self.lastFenFull = ''
+            self.engine = Engine()
+            self.engine.add_event_listener(self)
+            self.monitor = BoardMonitor()
+            self.monitor.add_event_listener(self)
+            self.engine.start()
+            self.monitor.start()
+            self.send_guicmd(GUIActionCmd.MESSAGE, 'Engine started')
+            self.restartCount = 5
+        except Exception as e:
+            self.restartCount -= 1
+            if self.restartCount <= 0:
+                raise Exception('The engine cannot restart:', e)
+            self.restart_engine()
+
+        
+
+    def build_gui(self):
         self.halfsize = int(self.gridsize/2)
         self.root = tk.Tk()
         self.gridCenter = [[None for i in range(GRID_WIDTH)] for j in range(GRID_HEIGHT)] # [Y,X] = [row,col]
-        self.guiUpdateAction = queue.Queue()
-        self.guiUpdaterId = None
-
         self.playCanvas = self.draw_play_area()
         self.controlFrame = self.draw_controls()
         self.logview = self.draw_logview()
 
-        self.eventListeners: List[HelperGUIListener] = []
-
-    def add_event_listener(self, listener: HelperGUIListener):
-        self.eventListeners.append(listener)
 
     def draw_play_area(self) -> tk.Canvas:
         hs = self.halfsize
@@ -146,19 +177,19 @@ class HelperGUI:
 
         return canvas
     
-    def send_event(self, action: GUIEventType, params=None):
-        # print(f'Sending GUI event {action} {params}')
-        for l in self.eventListeners:
-            l.on_gui_event(action, params)
-    
     def draw_controls(self):
         fr = tk.Frame(self.root)
         fr.grid_rowconfigure(0, weight=1)
         fr.grid_columnconfigure(1, weight=1)
 
-        getmoveBtn = tk.Button(fr, text='Myside', padx=10, pady=5,
-                               command= lambda: self.send_event(GUIEventType.ForceMySideNextMove))
-        getmoveBtn.grid(row=0, column=0, sticky='ns')
+        restartBtn = tk.Button(fr, text="RESTART", padx=20, pady=5, command=self.restart_engine)
+        restartBtn.grid(row=0, column=0, sticky='ns')
+
+        def forceMySideMoveNext():
+            self.monitor.forceNextSide = self.monitor.mySide
+            print(f'Force move side {self.monitor.forceNextSide}')
+        getmoveBtn = tk.Button(fr, text='Myside', padx=10, pady=5, command=forceMySideMoveNext)
+        getmoveBtn.grid(row=0, column=2, sticky='ns')
 
         mtVal = tk.IntVar(value=2)
         def mtUpdate(inc):
@@ -169,7 +200,8 @@ class HelperGUI:
                 cur -= 1
             if cur < 6 and cur > 0:
                 mtVal.set(cur)
-                self.send_event(GUIEventType.SetMoveTime, cur)
+                self.engine.movetime = cur * 1000
+                print(f'Set Engine movetime = {cur} second')
 
         fr2 = tk.Frame(fr, padx=10, pady=5)
         mtEntry = tk.Entry(fr2, textvariable=mtVal, justify='center')
@@ -183,7 +215,7 @@ class HelperGUI:
         mtBtnDown.pack(side=tk.BOTTOM)
         # mtEntry.grid(row=0, column=1, sticky='ns')
         mtEntry.pack(side=tk.LEFT, ipadx=15)
-        fr2.grid(row=0,column=1, sticky='ns')
+        fr2.grid(row=0,column=3, sticky='ns')
         
         fr.pack()
         return fr
@@ -295,3 +327,53 @@ class HelperGUI:
         self.gui_handler()
         self.root.protocol('WM_DELETE_WINDOW', self.quit_cleanup)
         self.root.mainloop()
+
+
+    # Monitor callback
+    def on_board_updated(self, fen: str, moveSide: Side, lastmovePosition):
+        if moveSide == Side.Unknow:
+            if self.lastFen == fen:
+                print(f'** Warning: Unkown move side with same fen. Ignored')
+                return
+            else:
+                print(f'** Error: Unkown move side. Assume not is me')
+                # self.gui.send_guicmd(GUIActionCmd.MESSAGE, '** Error: Unknown move side')
+                moveSide = self.monitor.mySide
+
+        self.lastFen = fen
+        nextSide = moveSide.opponent
+
+        # update gui
+        self.send_guicmd(GUIActionCmd.Position, [self.monitor.positions, lastmovePosition])
+
+        myturn = self.help and nextSide == self.monitor.mySide
+        # no point to set position if we don't neef the move generate
+        if myturn:
+            self.lastFenFull = f'{fen} {nextSide.fen} - - 0 1'
+            self.engine.start_next_move(self.lastFenFull)
+
+    def on_monitor_error(self, msg):
+        self.send_guicmd(GUIActionCmd.MESSAGE, msg)
+
+    # Engine callback
+    def on_move_calculated(self, fen, score, info):
+        if self.lastFenFull != fen:
+            print(f'** Warn: Late arrival on move. Ignored. cur {self.lastFenFull} --- {fen}')
+            self.send_guicmd(GUIActionCmd.MESSAGE, '** Warn: Late arrival on move. Ignored')
+            return
+        if info is None:
+            print('** Error: info is None')
+            self.send_guicmd(GUIActionCmd.MESSAGE, '** Error: NO Bestmove')
+            return
+        print(f'[{score}] {info["pv"][:self.debugDepth]}')
+        moves = []
+        for mv in info["pv"][:self.debugDepth]:
+            try:
+                moves.append( self.monitor.move_parse(mv) )
+            except Exception as e:
+                print(f'** Error: Failed to parse move "{mv}"')
+                self.send_guicmd(GUIActionCmd.MESSAGE, f'** Error: Failed to parse move "{mv}"')
+                print(e)
+                break
+        self.send_guicmd(GUIActionCmd.Moves, moves)
+        self.send_guicmd(GUIActionCmd.MESSAGE, f'Bestmove: {score} {info["pv"][:2]}')
