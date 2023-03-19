@@ -114,7 +114,7 @@ class Builder(HelperEngine):
             except:
                 pass
             try:
-                userdir = f'{pathlib.Path().absolute()}\\xiangqiHelperData'
+                userdir = f'{pathlib.Path().absolute()}\\browser_cache'
                 options = webdriver.ChromeOptions()
                 options.add_argument(f"user-data-dir={userdir}")
                 if self.headless:
