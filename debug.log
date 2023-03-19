@@ -1,8 +1,7 @@
-Fairy-Stockfish 14.0.1 XQ by Fabian Fichter
-id name Fairy-Stockfish 14.0.1 XQ
+Fairy-Stockfish 240123 LB by Fabian Fichter
+id name Fairy-Stockfish 240123 LB
 id author Fabian Fichter
 
-option name Protocol type combo default uci var uci var usi var ucci var ucicyclone var xboard
 option name Debug Log File type string default 
 option name Threads type spin default 1 min 1 max 512
 option name Hash type spin default 16 min 1 max 33554432
@@ -14,7 +13,7 @@ option name Move Overhead type spin default 10 min 0 max 5000
 option name Slow Mover type spin default 100 min 10 max 1000
 option name nodestime type spin default 0 min 0 max 10000
 option name UCI_Chess960 type check default false
-option name UCI_Variant type combo default chess var 3check var 5check var ai-wok var almost var amazon var antichess var armageddon var asean var ataxx var atomic var breakthrough var bughouse var cambodian var capablanca var capahouse var caparandom var centaur var chancellor var chaturanga var chess var chessgi var chigorin var clobber var clobber10 var codrus var coregal var courier var crazyhouse var dobutsu var embassy var euroshogi var extinction var fairy var fischerandom var gardner var giveaway var gorogoro var gothic var grand var grasshopper var hoppelpoppel var horde var janggi var janggicasual var janggimodern var janggitraditional var janus var jesonmor var judkins var karouk var kinglet var kingofthehill var knightmate var koedem var kyotoshogi var loop var losalamos var losers var makpong var makruk var manchu var micro var mini var minishogi var minixiangqi var modern var newzealand var nightrider var nocastle var nocheckatomic var normal var okisakishogi var opulent var placement var pocketknight var racingkings var seirawan var shako var shatar var shatranj var shogi var shoshogi var shouse var sittuyin var suicide var supply var tencubed var threekings var torishogi var xiangqi var yarishogi
+option name UCI_Variant type combo default chess var 3check var 5check var ai-wok var almost var amazon var antichess var armageddon var asean var ataxx var atomic var breakthrough var bughouse var cambodian var capablanca var capahouse var caparandom var centaur var chancellor var chaturanga var chess var chessgi var chigorin var clobber var clobber10 var codrus var coregal var courier var crazyhouse var dobutsu var dragon var embassy var euroshogi var extinction var fairy var fischerandom var flipello var flipello10 var flipersi var gardner var giveaway var gorogoro var gothic var grand var grasshopper var hoppelpoppel var horde var janggi var janggicasual var janggimodern var janggitraditional var janus var jesonmor var judkins var karouk var kinglet var kingofthehill var knightmate var koedem var kyotoshogi var loop var losalamos var losers var makpong var makruk var manchu var micro var mini var minishogi var minixiangqi var modern var newzealand var nightrider var nocastle var nocheckatomic var normal var okisakishogi var opulent var placement var pocketknight var raazuvaa var racingkings var seirawan var shako var shatar var shatranj var shogi var shoshogi var shouse var sittuyin var suicide var supply var tencubed var threekings var torishogi var xiangqi var yarishogi
 option name UCI_AnalyseMode type check default false
 option name UCI_LimitStrength type check default false
 option name UCI_Elo type spin default 1350 min 500 max 2850
@@ -24,31 +23,25 @@ option name SyzygyProbeDepth type spin default 1 min 1 max 100
 option name Syzygy50MoveRule type check default true
 option name SyzygyProbeLimit type spin default 7 min 0 max 7
 option name Use NNUE type check default true
-option name EvalFile type string default xiangqi-83f16c17fe26.nnue;janggi-85de3dae670a.nnue
+option name EvalFile type string default xiangqi-aa162e1771e5.nnue
 option name TsumeMode type check default false
 option name VariantPath type string default <empty>
+option name usemillisec type check default true
 uciok
-info string NNUE evaluation using xiangqi-83f16c17fe26.nnue enabled
-bestmove c8c1
-info string NNUE evaluation using xiangqi-83f16c17fe26.nnue enabled
-info depth 1 seldepth 1 multipv 1 score cp 13 nodes 114 nps 114000 tbhits 0 time 1 pv c8c9 e9e8
-info depth 2 seldepth 2 multipv 1 score cp 26 nodes 198 nps 198000 tbhits 0 time 1 pv c8c6 b2b1 d1d2
-info depth 3 seldepth 3 multipv 1 score cp 26 nodes 466 nps 233000 tbhits 0 time 2 pv c8c6 b2b1 d1d2
-info depth 4 seldepth 4 multipv 1 score cp 30 nodes 825 nps 275000 tbhits 0 time 3 pv c8c6 b2b5 c6c9 e9e8
-info depth 5 seldepth 5 multipv 1 score cp 25 nodes 1229 nps 307250 tbhits 0 time 4 pv c8c6 g10i8 a10f10 b2b1 d1d2
-info depth 6 seldepth 6 multipv 1 score cp 18 nodes 2851 nps 285100 tbhits 0 time 10 pv c8c9 e9e8 b6b9 b2b1 d1d2
-info depth 7 seldepth 7 multipv 1 score cp 0 nodes 6349 nps 334157 tbhits 0 time 19 pv c8c6 b2b3 d1d2 b3b2 d2d1
-info depth 8 seldepth 6 multipv 1 score cp 0 nodes 8397 nps 322961 tbhits 0 time 26 pv c8c6 b2b3 d1d2 b3b2 d2d1
-info depth 9 seldepth 9 multipv 1 score cp 35 nodes 12270 nps 340833 tbhits 0 time 36 pv b6c6 b2b4 d1d2 b4g4 c6c2 g4g1 c8c7
-info depth 10 seldepth 14 multipv 1 score cp 42 nodes 27119 nps 343278 tbhits 0 time 79 pv b6c6 b2b4 d1d2 e7e6 c6c2 e6e5 c8c9 e9e8 a10f10
-info depth 11 seldepth 16 multipv 1 score cp 78 nodes 34003 nps 346969 tbhits 0 time 98 pv b6b8 b2b1 d1d2 b1a1 c8c9 e9e8 a10f10
-info depth 12 seldepth 17 multipv 1 score cp 86 nodes 46634 nps 345437 tbhits 0 time 135 pv c8c9 e9e8 c9c7 b2b1 d1d2 b1b6 c7e7 e8f8 e7f7 f8e8 f7f3 b6b10 a10a9 b10b2 d2d1 b2b1 d1d2
-info depth 13 seldepth 21 multipv 1 score cp 112 nodes 54025 nps 348548 tbhits 0 time 155 pv c8c9 e9e8 c9c8 e8e9 b6b8 e9f9 a10b10 b2f2 c8c7 f2f1 d1d2 f3e5
-info depth 14 seldepth 16 multipv 1 score cp 508 nodes 116284 nps 311753 tbhits 0 time 373 pv b6b8 e9f9 a10a9 b2b1 d1d2 b1b8 c8b8
-info depth 15 seldepth 14 multipv 1 score cp 601 nodes 132198 nps 312524 tbhits 0 time 423 pv b6b8 e9f9 a10a9 b2b1 d1d2 b1b8 c8b8 e7e6 b8b4 f3h2 d2d1
-info depth 16 seldepth 24 multipv 1 score cp 587 nodes 214311 nps 309251 tbhits 0 time 693 pv b6b8 b2b1 d1d2 e9f9 a10a9 b1b8 c8b8 f3e5 b8b7 e5g4 b7e7 i7i6 d2d1 i6i5 e7f7 f9e9 i4i5 g4i5 f7f10
-info depth 17 seldepth 26 multipv 1 score cp 612 nodes 349383 nps 324102 hashfull 189 tbhits 0 time 1078 pv b6b8 b2b1 d1d2 e9f9 a10a9 b1b8 c8b8 e7e6 b8b6 f3e5 b6e6 e5g4 e6e7 g4h6 e7h7 h6g4 h7f7 f9e9 a9a10 g4h2
-info depth 18 seldepth 26 multipv 1 score cp 624 nodes 471497 nps 329718 hashfull 253 tbhits 0 time 1430 pv b6b8 b2b1 d1d2 e9f9 a10a9 b1b8 c8b8 f3e5 g4g5 e5c4 d2d1 c4d6 b8b4 e7e6 b4b9 f9f8 b9b4 f10e9 a9a10
-info depth 19 seldepth 26 multipv 1 score cp 625 nodes 606214 nps 331990 hashfull 327 tbhits 0 time 1826 pv b6b8 b2b1 d1d2 e9f9 a10a9 b1b8 c8b8 f3h2 g4g5 h2f1 d2d1 f1g3 b8b9 f9f8 b9b4 g3e2 b4f4 f8e8 f4c4 e8f8 a9a10
-info depth 20 seldepth 26 multipv 1 score cp 625 nodes 663399 nps 331533 hashfull 359 tbhits 0 time 2001 pv b6b8 b2b1 d1d2 e9f9 a10a9 b1b8 c8b8 f3h2 g4g5 h2f1 d2d1 f1g3 b8b9 f9f8 b9b4 g3e2 b4f4 f8e8 f4c4 e8f8 a9a10
-bestmove b6b8 ponder b2b1
+info string NNUE evaluation using xiangqi-aa162e1771e5.nnue enabled
+info depth 1 seldepth 1 multipv 1 score cp -409 nodes 92 nps 46000 tbhits 0 time 2 pv d5d7
+info depth 2 seldepth 2 multipv 1 score cp -598 nodes 139 nps 69500 tbhits 0 time 2 pv d5b5 e3c3 b5e5
+info depth 3 seldepth 3 multipv 1 score cp -598 nodes 233 nps 116500 tbhits 0 time 2 pv d5b5 e3c3 b5e5
+info depth 4 seldepth 4 multipv 1 score cp -541 nodes 347 nps 173500 tbhits 0 time 2 pv d5b5 e3c3
+info depth 5 seldepth 5 multipv 1 score cp -541 nodes 476 nps 158666 tbhits 0 time 3 pv d5b5 e3c3 b5e5 c3c1 d1d2
+info depth 6 seldepth 6 multipv 1 score cp -511 nodes 1195 nps 239000 tbhits 0 time 5 pv d5d7 e3c3 b2b7
+info depth 7 seldepth 7 multipv 1 score cp -580 upperbound nodes 1832 nps 229000 tbhits 0 time 8 pv d5b5 g10e8
+bestmove d5b5 ponder g10e8
+info string NNUE evaluation using xiangqi-aa162e1771e5.nnue enabled
+info depth 1 seldepth 1 multipv 1 score cp -627 nodes 57 nps 28500 tbhits 0 time 2 pv b2b7
+info depth 2 seldepth 2 multipv 1 score cp -581 nodes 95 nps 47500 tbhits 0 time 2 pv b2b7 c3c1 d1d2
+info depth 3 seldepth 3 multipv 1 score cp -581 nodes 156 nps 78000 tbhits 0 time 2 pv b2b7 c3c1 d1d2
+info depth 4 seldepth 4 multipv 1 score cp -561 nodes 242 nps 121000 tbhits 0 time 2 pv b2b7 c3c1 d1d2
+info depth 5 seldepth 5 multipv 1 score cp -678 nodes 1218 nps 243600 tbhits 0 time 5 pv d1d2 e5e4 b2a2 e4e3 a2a1
+info depth 6 seldepth 6 multipv 1 score cp -735 nodes 1657 nps 276166 tbhits 0 time 6 pv d1d2 e5e4
+bestmove d1d2 ponder e5e4

@@ -181,7 +181,13 @@ class Side(Enum):
             return 'b'
         raise Exception('should not be called')
 
+class MonitorFatal(Enum):
+    NoBoardFound = 1
+
 class BoardMonitorListener(ABC):
+    @abstractmethod
+    def on_monitor_fatal(self, type: MonitorFatal):
+        pass
     @abstractmethod
     def on_monitor_error(self, msg: str):
         pass
@@ -200,13 +206,14 @@ class PiecePattern:
         self.gray = load_gray(self.fullName)
 
 class BoardMonitor:
-    # upleftSize = get_imgsize('upleft_fullsize')
-    playSize = get_imgsize('play_area')
-    pieceSize = get_imgsize('BlackKing')
-    playStart = get_imgsize('corrner2playfield')
+    playSize = get_imgsize('play_area')             # The captured image of playing field only. This is used to calculate the grid size
+    pieceSize = get_imgsize('BlackKing')            # Any image that have the size of piece to search
+    playStart = get_imgsize('corrner2playfield')    # To get the offset from where Border is detected, to the actual playing field
     gridSize = np.divide(playSize, (GRID_WIDTH-1, GRID_HEIGHT-1))
     
-    borderPatternGray, borderPatternMask = load_img_mask('border')
+    borderPatternGray, borderPatternMask = load_img_mask('border')  # The border pattern. Make sure that the tool can recognize this given any active possition
+                                                                    # NOTE: when the lastmove is in the conner, the lastmove indicator may "peek" into border pattern
+                                                                    #       make sure to mask it properly
     borderSize = get_imgsize('border')
     lastMovePatternGray, lastMovePatternMsk = load_img_mask('lastMove')
 
@@ -316,13 +323,18 @@ class BoardMonitor:
         self.lastBoardStr = fen
         self.lastMoveSide = moveSide
 
+    def send_board_fatal(self, type: MonitorFatal):
+        for l in self.eventListeners:
+            l.on_monitor_fatal(type)
+
     # a little bit faster, but still slow thouigh...
     def scan_image(self, board_gray):
         board = self.crop_image(board_gray)
         self.clear_board()
 
         if board is None:
-            self.send_msg("** Error : No Board found.")
+            # self.send_msg("** Error : No Board found.")
+            self.send_board_fatal(MonitorFatal.NoBoardFound)
             self.lastBoardStr = ''
             return
 
@@ -439,9 +451,9 @@ class BoardMonitor:
         sx, sy = FILE2NUM[m.group(1)], int(m.group(2))
         ex, ey = FILE2NUM[m.group(3)], int(m.group(4))
         if self.mySide==Side.Black:
-            return ( (GRID_WIDTH-sx, sy-1), (GRID_WIDTH-ex, ey-1) )
+            return [ [GRID_WIDTH-sx, sy-1], [GRID_WIDTH-ex, ey-1] ]
         else:
-            return ( (sx-1, GRID_HEIGHT-sy), (ex-1, GRID_HEIGHT-ey) )
+            return [ [sx-1, GRID_HEIGHT-sy], [ex-1, GRID_HEIGHT-ey] ]
 
     def screen_check(self):
         # start = timer()
@@ -457,7 +469,11 @@ class BoardMonitor:
             import time
             print('** Info: ScreenMonitor started')
             while not self.stopPolling:
-                self.screen_check()
+                try:
+                    self.screen_check()
+                except Exception as e:
+                    print('screen check failed', e)
+                    break
                 time.sleep(delaySecond)
             self.pollingStopped.set()
             self.engine_thread = None

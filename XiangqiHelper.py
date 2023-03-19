@@ -3,7 +3,7 @@ import tkinter.scrolledtext as tkst
 import queue
 from enum import Enum
 
-from FairyfishUCIAdapter import Engine, EngineEventListener
+from FairyfishUCIAdapter import Engine, EngineEventListener, Move
 from BoardMonitor import BoardMonitor, BoardMonitorListener, Side
 
 DEFAULT_SIZE = 40
@@ -198,10 +198,10 @@ class XiangqiHelper(EngineEventListener, BoardMonitorListener):
                 cur += 1
             else:
                 cur -= 1
-            if cur < 6 and cur > 0:
+            if cur < 15 and cur > 0:
                 mtVal.set(cur)
-                self.engine.movetime = cur * 1000
-                print(f'Set Engine movetime = {cur} second')
+                self.engine.set_movetime(cur * 1000)
+                # print(f'Set Engine movetime = {cur} second')
 
         fr2 = tk.Frame(fr, padx=10, pady=5)
         mtEntry = tk.Entry(fr2, textvariable=mtVal, justify='center')
@@ -213,10 +213,34 @@ class XiangqiHelper(EngineEventListener, BoardMonitorListener):
         mtBtnDown = tk.Button(mtButtonframe, text="▼", font="none 5",
                               command=lambda: mtUpdate(False))
         mtBtnDown.pack(side=tk.BOTTOM)
-        # mtEntry.grid(row=0, column=1, sticky='ns')
         mtEntry.pack(side=tk.LEFT, ipadx=15)
         fr2.grid(row=0,column=3, sticky='ns')
         
+        pvVal = tk.IntVar(value=1)
+        def pvUpdate(inc):
+            cur = pvVal.get()
+            if inc:
+                cur += 1
+            else:
+                cur -= 1
+            if cur < 30 and cur > 0:
+                pvVal.set(cur)
+                self.engine.set_multipv(cur)
+
+        pvFrame = tk.Frame(fr, padx=10, pady=5)
+        pvEntry = tk.Entry(pvFrame, textvariable=pvVal, justify='center')
+        pvButtonframe = tk.Frame(pvEntry)
+        pvButtonframe.pack(side=tk.RIGHT)
+        pvBtnUp = tk.Button(pvButtonframe, text="▲", font="none 5",
+                            command=lambda: pvUpdate(True))
+        pvBtnUp.pack(side=tk.TOP)
+        pvBtnDown = tk.Button(pvButtonframe, text="▼", font="none 5",
+                              command=lambda: pvUpdate(False))
+        pvBtnDown.pack(side=tk.BOTTOM)
+        pvEntry.pack(side=tk.LEFT, ipadx=15)
+        pvFrame.grid(row=0,column=4, sticky='ns')
+        
+
         fr.pack()
         return fr
     
@@ -356,18 +380,18 @@ class XiangqiHelper(EngineEventListener, BoardMonitorListener):
         self.send_guicmd(GUIActionCmd.MESSAGE, msg)
 
     # Engine callback
-    def on_move_calculated(self, fen, score, info):
+    def on_move_calculated(self, fen, info: Move):
         if self.lastFenFull != fen:
             print(f'** Warn: Late arrival on move. Ignored. cur {self.lastFenFull} --- {fen}')
-            self.send_guicmd(GUIActionCmd.MESSAGE, '** Warn: Late arrival on move. Ignored')
+            # self.send_guicmd(GUIActionCmd.MESSAGE, '** Warn: Late arrival on move. Ignored')
             return
         if info is None:
             print('** Error: info is None')
             self.send_guicmd(GUIActionCmd.MESSAGE, '** Error: NO Bestmove')
             return
-        print(f'[{score}] {info["pv"][:self.debugDepth]}')
+        print(info)
         moves = []
-        for mv in info["pv"][:self.debugDepth]:
+        for mv in info.iter_moves(self.debugDepth):
             try:
                 moves.append( self.monitor.move_parse(mv) )
             except Exception as e:
@@ -376,4 +400,4 @@ class XiangqiHelper(EngineEventListener, BoardMonitorListener):
                 print(e)
                 break
         self.send_guicmd(GUIActionCmd.Moves, moves)
-        self.send_guicmd(GUIActionCmd.MESSAGE, f'Bestmove: {score} {info["pv"][:2]}')
+        self.send_guicmd(GUIActionCmd.MESSAGE, f'Bestmove: {info.bestmove}')
