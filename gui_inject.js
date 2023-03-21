@@ -18,6 +18,7 @@ var ID_CONTROL = 'xhControl';
 var ID_CONTROL_MOVETIME = 'xhCtrlMovetime';
 var ID_CONTROL_MULTIPV = 'xhCtrlMultipv';
 var ID_CONTROL_LOGTEXT = 'xhCtrlLogtext';
+var ID_CONTROL_POPUPTEXT = 'xgPopupText';
 
 var gridSize = 40;
 var padding = 30;
@@ -72,6 +73,13 @@ var canvasDiv = addElement(side1Div, 'div', null,
 var canvas = addElement(canvasDiv, 'canvas', ID_CANVAS,
                         {zIndex: 8, position: "absolute", border: "1px solid"},
                         {width: canvasW, height: canvasH});
+
+// popup text
+var popupDiv = addElement(canvasDiv, 'div', null,
+                        {position: 'absolute', width: `${canvasW+10}px`, height: `${canvasH+10}px`})
+var popupText = addElement(popupDiv, 'p', ID_CONTROL_POPUPTEXT,
+                        {textAlign: 'center', verticalAlign: 'middle', lineHeight: `${canvasH+10}px`,
+                        fontSize: `${gridSize}px`, fontFamily: 'sans-serif', fontWeight: 'bold', color: 'red'})
 
 // addElement(document, 'script', null, {}, {src: 'board_drawing.js'})
 // var canvasScript = document.createElement('script')

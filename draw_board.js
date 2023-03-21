@@ -80,14 +80,18 @@ function draw_board() {
 }
 
 //
-function show_popup({message}) {
+function show_popup_draw({message}) {
     let ctx = draw_board();
     if (ctx==null) return;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ff5959';
-    ctx.font = `bold ${gridSize}px serif`;
+    ctx.font = `bold ${gridSize}px sans-serif`;
     ctx.fillText(message, canvasW/2, canvasH/2);
+}
+function show_popup({message}) {
+    let t = document.getElementById(ID_CONTROL_POPUPTEXT)
+    if (t!=null) t.innerText = message
 }
 
 //////
@@ -107,7 +111,7 @@ function draw_position(ctx, positions) {
     let rad = Math.floor(gridSize*0.4);
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    ctx.font = `bold ${gridSize/2}px serif`;
+    ctx.font = `bold ${gridSize/2}px sans-serif`;
     for (let x=0; x<BOARD_WIDHT; x++) {
         for (let y=0; y<BOARD_HEIGH; y++) {
             let p = positions[y][x];

@@ -279,7 +279,7 @@ class Engine():
                     case EngineCmdType.SetFen:
                         self.set_fen(cmd.params)
                     case EngineCmdType.SetMovetime:
-                        self.uci_movetime = cmd.params
+                        self.uci_movetime = int(cmd.params)*1000
                         print(f'[Engine] set movetime = {self.uci_movetime}')
                     case EngineCmdType.SetMultipv:
                         self.uci_multipv = cmd.params

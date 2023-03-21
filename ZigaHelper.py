@@ -31,6 +31,7 @@ ID_CONTROL_LOGTEXT = 'xhCtrlLogtext'
 
 def fatal(msg):
     print(f'** Fatal: {msg}')
+    exit()
 
 def read_js(filename, startPtn=None, endPtn=None):
     try:
@@ -45,14 +46,14 @@ def read_js(filename, startPtn=None, endPtn=None):
         # data = data.replace('\n',' ')
         return data
     except Exception as e:
-        fatal(f'Error during loading script "{filename}": {e}')
+        print(f'Error during loading script "{filename}": {e}')
 
 class JsFunc(StrEnum):
     DRAW_BOARD = 'draw_board'
     SHOW_POPUP = 'show_popup'
     POSITION = 'update_position'
 
-class Builder(HelperEngine):
+class ZigaHelper(HelperEngine):
     def __init__(self, headless=False) -> None:
         super().__init__()
         self.logs = []
@@ -89,13 +90,13 @@ class Builder(HelperEngine):
         try:
             self.driver.execute_script(src, *param)
         except Exception as e:
-            fatal(f'Error during execute script: {src[:80]}...\n{e}')
+            print(f'Error during execute script: {src[:80]}...\n{e}')
 
     def exe_js_func(self, jsfunc: JsFunc, param={}):
         try:
             self.driver.execute_script(f'{self.js_vars}\n{jsfunc.value}({param})')
         except Exception as e:
-            fatal(f'Error during execute func: {jsfunc} {param}...\n{e}')
+            print(f'Error during execute func: {jsfunc} {param}...\n{e}')
 
     def test(self):
         options = webdriver.ChromeOptions()
@@ -215,10 +216,11 @@ class Builder(HelperEngine):
                 except (NoSuchElementException, StaleElementReferenceException):
                     self.start(reload=True)
                     return
-                except WebDriverException:
-                    if not self.is_stopped:
-                        self.start(reload=False)
-                    return
+                except WebDriverException as e:
+                    fatal(f'Error during GUI handling : {e}')
+                    # if not self.is_stopped:
+                    #     self.start(reload=False)
+                    # return
                 time.sleep(0.5)
             self.stop()
         threading.Thread(target=poll).start()
@@ -231,14 +233,18 @@ class Builder(HelperEngine):
                 print(f'** Error: Unknown fatal {type}')
 
     def update_gui(self):
+        self.exe_js_func(JsFunc.SHOW_POPUP, dict(message=''))
         self.exe_js_func(JsFunc.POSITION,
                          dict(positions=self.lastPosition, 
                               lastmove=self.lastmove, 
                               movelist=self.lastMovelist))
 
-    def update_position(self, positions, lastmove):
+    def update_position(self, positions, lastmove, newturn):
+        # print(f'update posistion {newturn} {lastmove}')
         self.lastPosition = positions
         self.lastmove = [] if lastmove is None else [lastmove[0],lastmove[1]]
+        if newturn:
+            self.lastMovelist = [] # clear movelist in new turn
         self.update_gui()
 
     def update_movelist(self, movelist):
@@ -294,3 +300,8 @@ class Builder(HelperEngine):
 #         return bg
 #     else:
 #         return im
+
+if __name__ == "__main__":
+    x = ZigaHelper()
+    x.start()
+    print(f'started')

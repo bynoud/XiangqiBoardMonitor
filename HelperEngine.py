@@ -91,7 +91,7 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
             try:
                 match act.action:
                     case GUIActionCmd.Position:
-                        self.update_position(act.params[0], act.params[1])
+                        self.update_position(act.params[0], act.params[1], act.params[2])
                     case GUIActionCmd.Moves:
                         self.update_movelist(act.params)
                     case GUIActionCmd.Message:
@@ -105,6 +105,7 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
     # Monitor callback
     def on_board_updated(self, fen: str, moveSide: Side, lastmovePosition):
         if moveSide == Side.Unknow:
+
             if self.lastFen == fen:
                 print(f'** Warning: Unkown move side with same fen. Ignored')
                 return
@@ -114,9 +115,10 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
 
         self.lastFen = fen
         nextSide = moveSide.opponent
+        newturn = nextSide == self.monitor.mySide
 
         # update gui
-        self.send_guicmd(GUIActionCmd.Position, [self.monitor.positions, lastmovePosition])
+        self.send_guicmd(GUIActionCmd.Position, [self.monitor.positions, lastmovePosition, newturn])
 
         myturn = self.help and nextSide == self.monitor.mySide
         # no point to set position if we don't neef the move generate
@@ -153,7 +155,7 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
         self.send_guicmd(GUIActionCmd.Moves, moves)
         self.send_msg(f'Bestmove: {info.bestmove}')
 
-    def update_position(self, positions, lastmove):
+    def update_position(self, positions, newturn):
         pass
         # self.clear_pieces()
         # for x in range(GRID_WIDTH):
