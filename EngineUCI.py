@@ -3,14 +3,23 @@ from collections.abc import Iterable
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import List
-import time
+import time, sys, logging
 import subprocess
 import threading
 
 from pprint import PrettyPrinter
 
+logger = logging.getLogger()
+
 DEFAULT_OPT = {'UCI_Variant':'xiangqi', 'UCI_Elo': 2850}
-DEFAULT_ENGPATH = 'engine_exe_aa162e1771e5_2023Jan25/fairy-stockfish_x86-64-bmi2.exe'
+ENGINE_EXE_NAME = 'fairy-stockfish_x86-64-bmi2.exe'
+# DEFAULT_ENGPATH = 'engine_exe/fairy-stockfish_x86-64-bmi2.exe'
+
+try:
+    # PyInstaller creates a temp folder and stores path in _MEIPASS
+    DEFAULT_ENGPATH = f'{sys._MEIPASS}/engine_exe/{ENGINE_EXE_NAME}'
+except Exception:
+    DEFAULT_ENGPATH = f'./engine_exe/{ENGINE_EXE_NAME}'
 
 INFO_KEYWORDS = {'depth': int, 'seldepth': int, 'multipv': int, 'nodes': int, 'nps': int, 'time': int, 'score': list, 'pv': list}
 class Move:
@@ -95,7 +104,7 @@ def parse_movelist(infos: List[Move], bestmove):
             selinfo = info
 
     if selinfo is None:
-        print(f'** Error: Info none {bestmove} {infos}')
+        logger.warning(f'Info none {bestmove} {infos}')
     return selinfo
 
 
@@ -147,7 +156,11 @@ class Engine():
         self.activefen = Queue(1)
         self.timeoutqueue = Queue()
 
-        self.process = subprocess.Popen([self.enginePath], stdin=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
+        try:
+            self.process = subprocess.Popen([self.enginePath], stdin=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
+        except:
+            logger.fatal(f'Engine cannot start from paht {self.enginePath}')
+            exit()
         self.pprinter = PrettyPrinter()
         self.lock = threading.Lock()
         self.paused = False
@@ -158,32 +171,19 @@ class Engine():
 
     def write(self, message):
         with self.lock:
-            # print(f'UCI: {message}', end='')
             self.process.stdin.write(message)
             self.process.stdin.flush()
 
     def write_nolock(self, *messages):
         for msg in messages:
-            # print(f'UCI: {msg}', end='')
             self.process.stdin.write(msg)
             self.process.stdin.flush()
-        # try:
-        #     with self.lock:
-        #         self.process.stdin.write(message)
-        #         self.process.stdin.flush()
-        # except Exception as e:
-        #     if retry:
-        #         self.reset()
-        #         self.start()
-        #         self.write(message, retry=False)
-        #     else:
-        #         raise(e)
 
     def setoption(self, name, value):
         self.write('setoption name {} value {}\n'.format(name, value))
 
     def initialize(self):
-        print('Engine init')
+        logger.info('Engine init')
         message = 'uci\n'
         for option, value in self.options.items():
             message += 'setoption name {} value {}\n'.format(option, value)
@@ -239,8 +239,9 @@ class Engine():
                 try:
                     self.timeoutqueue.get_nowait()
                 except Empty:
-                    print(f'** Error: Timeout for "{x}"')
-                    break
+                    # logger.error(f'** Error: Timeout for "{x}"')
+                    raise Exception(f'** Error: Timeout for "{x}"')
+                    # break
         threading.Thread(target=check, daemon=True).start()
 
     def send_cmd(self, action: EngineCmdType, params=None):
@@ -251,14 +252,14 @@ class Engine():
             cmd: EngineCmd = self.commandQueue.get()
 
             if cmd.action == EngineCmdType.Quit:
-                print('Adapter execute finished')
+                logger.info('Adapter execute finished')
                 self.write_nolock('stop\n', 'quit\n')
                 return
             
             precmd = None
             while cmd.action == EngineCmdType.SetFen:
                 if precmd is not None:
-                    print(f'** Warning : CMD ignored {cmd}')
+                    logger.warning(f'** Warning : CMD ignored {cmd}')
                 precmd = cmd
                 try:
                     cmd = self.commandQueue.get_nowait()
@@ -280,13 +281,13 @@ class Engine():
                         self.set_fen(cmd.params)
                     case EngineCmdType.SetMovetime:
                         self.uci_movetime = int(cmd.params)*1000
-                        print(f'[Engine] set movetime = {self.uci_movetime}')
+                        logger.info(f'[Engine] set movetime = {self.uci_movetime}')
                     case EngineCmdType.SetMultipv:
                         self.uci_multipv = cmd.params
                         self.write_nolock(f'setoption name MultiPV value {self.uci_multipv}\n')
-                        print(f'[Engine] set multipv = {self.uci_multipv}')
+                        logger.info(f'[Engine] set multipv = {self.uci_multipv}')
                     case _:
-                        print(f'[Engine] Error : unknow cmd {cmd.action}')
+                        logger.warning(f'unknow cmd {cmd.action}')
 
         threading.Thread(target=fen_execute, daemon=True).start()
 
@@ -297,7 +298,7 @@ class Engine():
         self.timeoutqueue.put(fen) # start timeout
         self.activefen.put(fen)
         self.timeoutqueue.put(fen) # stop timeout
-        print(f'Get move for {self.uci_movetime} "{fen}" ...')
+        logger.info(f'Get move for {self.uci_movetime} "{fen}" ...')
         self.write_nolock('ucinewgame\n',
                           f'position fen {fen}\n',
                           f'go movetime {self.uci_movetime}\n')
@@ -314,11 +315,10 @@ class Engine():
                 while not self.stopping:
                     line = self.process.stdout.readline()
                     logfile.write(line)
-                    # print("OUT: ", line, end='')
                     if line==lastline:
                         repeatcnt += 1
                         if repeatcnt > 100:
-                            print(f'Failed here')
+                            logger.warn(f'Failed here')
                             break
                     items = line.split()
                     if len(items) == 0:
@@ -331,23 +331,23 @@ class Engine():
                         bestmove, ponder = items[1], None if len(items)<4 else items[3]
                         try:
                             fen = self.activefen.get_nowait()
-                            print(f'Found bestmove for "{fen}" {bestmove} {ponder}')
+                            logger.info(f'Found bestmove for "{fen}" {bestmove} {ponder}')
                             info = parse_movelist(infos, (bestmove, ponder)) 
                             self.send_move_calculated_event(fen, info)
                             infos = []
                         except Empty:
-                            print(f'** Error: receiving bestmove log where not expected {bestmove} {ponder}')
+                            logger.warning(f'Receiving bestmove log where not expected {bestmove} {ponder}')
                         
             except RuntimeError:
                 pass
 
-            print('** Warn: Adapter thread closed')
+            logger.warning('Adapter thread closed')
             logfile.close()
 
         # def read_error():
         #     while self.process.poll() is None:
         #         err = self.process.stderr.readline()
-        #         print(f'UCI error: {err}')
+        #         logger.info(f'UCI error: {err}')
 
         threading.Thread(target=read_output, daemon=True).start()
         # threading.Thread(target=read_error, daemon=True).start()
@@ -366,12 +366,3 @@ class Engine():
 
     def pp(self, x):
         self.pprinter(x)
-
-# class C:
-#     d = 10
-#     def f1(self, a, b):
-#         time.sleep(5)
-#         print("f1", a, b, self.d)
-#     def f2(self, b):
-#         t = threading.Thread(target=self.f1, args=('aaa',b))
-#         t.start()

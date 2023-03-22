@@ -1,10 +1,13 @@
-import tkinter as tk
-import tkinter.scrolledtext as tkst
-import queue
+# import tkinter as tk
+# import tkinter.scrolledtext as tkst
+import queue, logging
 from enum import Enum
 
-from FairyfishUCIAdapter import Engine, EngineEventListener, Move
+from EngineUCI import Engine, EngineEventListener, Move
 from BoardMonitor import BoardMonitor, BoardMonitorListener, Side, MonitorFatal
+
+logger = logging.getLogger()
+
 
 GRID_HEIGHT = 10
 GRID_WIDTH = 9
@@ -33,7 +36,7 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
 
     def set_option(self, name, value):
         if name not in self.guiOptions:
-            print(f'** [Helper] Error: Unknow option {name}')
+            logging.warning(f'Unknow option {name}')
             return
         if value != self.guiOptions[name]:
             self.guiOptions[name] = value
@@ -43,18 +46,18 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
                 case 'multipv':
                     self.engine.set_multipv(value)
                 case _:
-                    print(f'** [Helper] Unknow option {name}')
+                    logging.warning(f'Unknow option {name}')
 
 
     def stop(self):
         try:
             self.engine.quit()
-            print('Engine stopped')
+            logger.info('Engine stopped')
         except:
             pass
         try:
             self.monitor.stop()
-            print('Monitor stopped')
+            logger.info('Monitor stopped')
         except:
             pass
 
@@ -99,7 +102,7 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
                     case _:
                         pass
             except:
-                print(f'** Failed to updating GUI. {act}')
+                logger.warning(f'** Failed to updating GUI. {act}')
 
 
     # Monitor callback
@@ -107,10 +110,10 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
         if moveSide == Side.Unknow:
 
             if self.lastFen == fen:
-                print(f'** Warning: Unkown move side with same fen. Ignored')
+                logger.warning(f'Unkown move side with same fen. Ignored')
                 return
             else:
-                print(f'** Error: Unkown move side. Assume not is me')
+                logger.warning(f'Unkown move side. Assume not is me')
                 moveSide = self.monitor.mySide
 
         self.lastFen = fen
@@ -135,22 +138,21 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
     # Engine callback
     def on_move_calculated(self, fen, info: Move):
         if self.lastFenFull != fen:
-            print(f'** Warn: Late arrival on move. Ignored. cur {self.lastFenFull} --- {fen}')
+            logger.info(f'Late arrival on move. Ignored. cur {self.lastFenFull} --- {fen}')
             # self.send_msg('** Warn: Late arrival on move. Ignored')
             return
         if info is None:
-            print('** Error: info is None')
+            logger.warning('info is None')
             self.send_msg('** Error: NO Bestmove')
             return
-        print(info)
+        logger.info(info)
         moves = []
         for mv in info.iter_moves(self.debugDepth):
             try:
                 moves.append( self.monitor.move_parse(mv) )
             except Exception as e:
-                print(f'** Error: Failed to parse move "{mv}"')
-                self.send_msg(f'** Error: Failed to parse move "{mv}"')
-                print(e)
+                logger.error(f'Failed to parse move "{mv}": {e}')
+                # self.send_msg(f'** Error: Failed to parse move "{mv}"')
                 break
         self.send_guicmd(GUIActionCmd.Moves, moves)
         self.send_msg(f'Bestmove: {info.bestmove}')

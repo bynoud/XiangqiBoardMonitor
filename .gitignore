@@ -1,4 +1,7 @@
 browser_cache
+build
+dist
+*.log
 .venv
 __pycache__
 *.pyc

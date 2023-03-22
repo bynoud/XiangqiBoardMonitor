@@ -5,21 +5,57 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException, NoSuchWindowException, WebDriverException, NoSuchElementException, StaleElementReferenceException
 from selenium import webdriver
 
-import threading, time, re, pickle, pathlib
+import threading, time, re, pathlib, sys, logging, argparse
 from enum import StrEnum
 
 from HelperEngine import HelperEngine, MonitorFatal
 
+# arguments & logging
+parser = argparse.ArgumentParser()
+parser.add_argument( '-log',
+                     '--loglevel',
+                     default='error',
+                     help='Provide logging level. Example --loglevel debug, default=warning' )
+
+args = parser.parse_args()
+loglevel = args.loglevel.upper()
+
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+logFormatter = logging.Formatter('%(module)-20s: %(message)s')
+
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(loglevel)
+stream_handler.setFormatter(logFormatter)
+logger.addHandler(stream_handler)
+
+
+fileHandler = logging.FileHandler('helper.log', mode='w')
+fileHandler.setFormatter(logFormatter)
+logger.addHandler(fileHandler)
+
+##################
+
 APP_URL = 'https://zigavn.com/'
 GAME_CANVAS_ID = 'gameCanvas' # inspect the page to get this
-COOKIE_FILE = 'mycookie.pkl'
+
+JSDIR = 'js'
+try:
+    # PyInstaller creates a temp folder and stores path in _MEIPASS
+    JSDIR = f'{sys._MEIPASS}/js'
+except Exception:
+    JSDIR = f'./js'
+logger.info(f'JSDIR {JSDIR}')
+# COOKIE_FILE = 'mycookie.pkl'
 
 def get_game_size(driver):
     try:
         canvas = driver.find_element(By.ID, GAME_CANVAS_ID)
         return (int(canvas.get_attribute('width')), int(canvas.get_attribute('height')))
     except:
-        print('** Error: no game canvas is found')
+        logging.error('no game canvas is found')
         return (1000,800)
 
 ###########
@@ -29,24 +65,20 @@ ID_CONTROL_MOVETIME = 'xhCtrlMovetime'
 ID_CONTROL_MULTIPV = 'xhCtrlMultipv'
 ID_CONTROL_LOGTEXT = 'xhCtrlLogtext'
 
-def fatal(msg):
-    print(f'** Fatal: {msg}')
-    exit()
-
 def read_js(filename, startPtn=None, endPtn=None):
     try:
-        with open(filename) as f:
+        with open(f'{JSDIR}/{filename}') as f:
             data = f.read()
         if startPtn is not None:
             x = re.match(f'.*^\s*// {startPtn}\s*\n(.*)\n\s*// {endPtn}.*', data, re.MULTILINE|re.DOTALL)
             if x is None:
-                fatal(f'File {filename} dont have JS variable markdown')
+                logger.fatal(f'File {filename} dont have JS variable markdown')
             data = x.group(1)
         # data = re.sub(re.compile(r'//.*$', re.MULTILINE), '', data) # remove comment
         # data = data.replace('\n',' ')
         return data
     except Exception as e:
-        print(f'Error during loading script "{filename}": {e}')
+        logger.fatal(f'Error during loading script "{filename}": {e}')
 
 class JsFunc(StrEnum):
     DRAW_BOARD = 'draw_board'
@@ -90,13 +122,13 @@ class ZigaHelper(HelperEngine):
         try:
             self.driver.execute_script(src, *param)
         except Exception as e:
-            print(f'Error during execute script: {src[:80]}...\n{e}')
+            logger.warning(f'Error during execute script: {src[:80]}...\n{e}')
 
     def exe_js_func(self, jsfunc: JsFunc, param={}):
         try:
             self.driver.execute_script(f'{self.js_vars}\n{jsfunc.value}({param})')
         except Exception as e:
-            print(f'Error during execute func: {jsfunc} {param}...\n{e}')
+            logger.warning(f'Error during execute func: {jsfunc} {param}...\n{e}')
 
     def test(self):
         options = webdriver.ChromeOptions()
@@ -108,10 +140,10 @@ class ZigaHelper(HelperEngine):
 
     def start(self, reload=False):
         if not reload:
-            print('** Web starting...')
+            logger.info('** Web starting...')
             try:
                 self.driver.close()
-                print(f'Web closed for reload')
+                logger.info(f'Web closed for reload')
             except:
                 pass
             try:
@@ -129,9 +161,9 @@ class ZigaHelper(HelperEngine):
                 if self.headless:
                     self.driver.get(APP_URL)
             except NoSuchWindowException:
-                fatal(f'cannot go to internet')
+                logger.fatal(f'cannot go to internet')
         else:
-            print('** Reloading')
+            logger.info('** Reloading')
             self.driver.get(APP_URL)
         self.restart()
         self.build_gui()
@@ -139,7 +171,7 @@ class ZigaHelper(HelperEngine):
             self.start_gui_polling()
 
     def stop(self):
-        print('GUI Exitting')
+        logger.info('GUI Exitting')
         # pickle.dump(self.driver.get_cookies(), open(COOKIE_FILE, "wb"))
         super().stop()
 
@@ -154,43 +186,8 @@ class ZigaHelper(HelperEngine):
         except WebDriverException:
             return True
 
-    # def load_js(self, filename, *params):
-    #     try:
-    #         with open(filename) as f:
-    #             data = f.read()
-    #         self.driver.execute_script(data, *params)
-    #     except Exception as e:
-    #         fatal(f'Error during loading script "{filename}" {params}: {e}')
-
-    # def inject_js(self, filename, startPtn=None, endPtn=None):
-    #     try:
-    #         with open(filename) as f:
-    #             data = f.read()
-    #         if startPtn is not None:
-    #             x = re.match(f'.*^\s*// {startPtn}\s*\n(.*)\n\s*// {endPtn}.*', data, re.MULTILINE|re.DOTALL)
-    #             if x is None:
-    #                 fatal(f'File {filename} dont have JS variable markdown')
-    #             data = x.group(1)
-    #         data = re.sub(re.compile(r'//.*$', re.MULTILINE), '', data) # remove comment
-    #         data = data.replace('\n',' ')
-    #         self.driver.execute_script(f'''
-    #             var scr = document.createElement('script')
-    #             scr.textContent = "{data}"
-    #             document.body.appendChild(scr);''')
-    #     except Exception as e:
-    #         fatal(f'Error during loading script "{filename}": {e}')
-
-    # def load_js_var(self, filename):
-    #     self.inject_js(filename, 'JS_VAR_START', 'JS_VAR_END')
-
-    # def reload(self):
-    #     print(f'** Warning: Page reloading')
-    #     self.driver.get(APP_URL)
-    #     self.build_gui()
-    #     self.start_gui_polling()
-
     def build_gui(self):
-        print(f'[Builder] building the GUI')
+        logger.info(f'[Builder] building the GUI')
         W, H = get_game_size(self.driver)
         self.exe_script(read_js('gui_inject.js'), dict(originalWidth=W, **self.guiOptions))
         self.exe_js_func(JsFunc.DRAW_BOARD)
@@ -206,9 +203,8 @@ class ZigaHelper(HelperEngine):
 
     def start_gui_polling(self):
         def poll():
-            print(f'GUI polling start {self.guiOptions}')
+            logger.info(f'GUI polling start {self.guiOptions}')
             while not self.is_stopped:
-                # print('check here')
                 try:
                     self.execute_gui_cmd()
                     self.set_option('movetime', self.movetimeEle.get_attribute('value'))
@@ -217,7 +213,7 @@ class ZigaHelper(HelperEngine):
                     self.start(reload=True)
                     return
                 except WebDriverException as e:
-                    fatal(f'Error during GUI handling : {e}')
+                    logger.fatal(f'Error during GUI handling : {e}')
                     # if not self.is_stopped:
                     #     self.start(reload=False)
                     # return
@@ -230,7 +226,7 @@ class ZigaHelper(HelperEngine):
             case MonitorFatal.NoBoardFound:
                 self.exe_js_func(JsFunc.SHOW_POPUP, dict(message='No Board detected'))
             case _:
-                print(f'** Error: Unknown fatal {type}')
+                logger.warning(f'** Error: Unknown fatal {type}')
 
     def update_gui(self):
         self.exe_js_func(JsFunc.SHOW_POPUP, dict(message=''))
@@ -240,7 +236,6 @@ class ZigaHelper(HelperEngine):
                               movelist=self.lastMovelist))
 
     def update_position(self, positions, lastmove, newturn):
-        # print(f'update posistion {newturn} {lastmove}')
         self.lastPosition = positions
         self.lastmove = [] if lastmove is None else [lastmove[0],lastmove[1]]
         if newturn:
@@ -304,4 +299,3 @@ class ZigaHelper(HelperEngine):
 if __name__ == "__main__":
     x = ZigaHelper()
     x.start()
-    print(f'started')

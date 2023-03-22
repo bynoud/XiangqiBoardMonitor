@@ -1,22 +1,27 @@
 import numpy as np
-import cv2
-import pyautogui
-import threading
-import re
+import cv2, threading, re, sys, logging
 from enum import Enum
 from abc import ABC, abstractmethod
 from PIL import ImageGrab
 from imutils.object_detection import non_max_suppression
 from timeit import default_timer as timer
 
-from typing import Dict, List, Literal
+from typing import Dict, List
+
+logger = logging.getLogger()
 
 PATTERN_SCALE = 1 # reduce image size for faster processing
 BORDER_THRESH = 0.8 # if nor scaling, 0.8 is enough. must try to get this right
 PIECE_THRESH = 0.8
 LASTMOVE_THRESH = 0.7
 
-PATTERN_PATH = './patterns'
+# PATTERN_PATH = './patterns'
+try:
+    # PyInstaller creates a temp folder and stores path in _MEIPASS
+    PATTERN_PATH = f'{sys._MEIPASS}/patterns'
+except Exception:
+    PATTERN_PATH = './patterns'
+
 GRID_WIDTH = 9
 GRID_HEIGHT = 10
 PIECE_NAME = 'King Advisor Elephant Rook Cannon Horse Pawn'.split()
@@ -93,7 +98,6 @@ def find_pattern_verbose(fileName, thresh=0.8):
                     (255, 0, 0), 3)
     
     # Show the template and the final output
-    # print(f'found {len(boxes)} {boxes}')
     cv2.imshow("After NMS", largeImg)
     cv2.waitKey(0)
     
@@ -113,7 +117,6 @@ def find_pattern(board_gray, piece_gray, thresh=0.5, center=1, display=0, mask=N
     for (x, y) in zip(x_points, y_points):
         boxes.append((x, y, x + W, y + H))
     boxes = non_max_suppression(np.array(boxes))
-    # print(boxes)
     if display==1:
         for (x1, y1, x2, y2) in boxes:
             # draw the bounding box on the image
@@ -128,14 +131,11 @@ def find_pattern(board_gray, piece_gray, thresh=0.5, center=1, display=0, mask=N
 
     return coords
 
-def screen_cap_pyautogui():
-    img = pyautogui.screenshot()
-    return cv2.cvtColor(np.array(img), cv2.COLOR_BGR2GRAY)
+# def screen_cap_pyautogui():
+#     img = pyautogui.screenshot()
+#     return cv2.cvtColor(np.array(img), cv2.COLOR_BGR2GRAY)
 
 def screen_cap_forscale(region=None):
-    # if region is None:
-    #     print(f'Capture the whole screen')
-    # img = ImageGrab.grab()
     # screencap actually not take much time compare ti matching, so make it simple...
     img = ImageGrab.grab(bbox=region)
     img = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2GRAY)
@@ -147,7 +147,7 @@ def screen_cap_forscale(region=None):
 # This only work for SCALE=1
 def screen_cap(region=None):
     # if region is None:
-    #     print(f'Capture the whole screen')
+    #     logger.info(f'Capture the whole screen')
     # img = ImageGrab.grab(bbox=region)
     # screencap actually not take much time compare ti matching, so make it simple...
     img = ImageGrab.grab(bbox=region)
@@ -259,7 +259,6 @@ class BoardMonitor:
         # upleft_ptn = cv2.imread(f'{PATTERN_PATH}/upleft.png', 0)
         borderPos = find_pattern(board_gray, self.borderPatternGray, mask=self.borderPatternMask, thresh=BORDER_THRESH, center=0)
         if len(borderPos) != 1:
-            # print("** Error : Cannot find upleft pattern. Check the input")
             self.lastScanRegion = None
             return None
 
@@ -297,27 +296,24 @@ class BoardMonitor:
         coord = coord[0]
         return np.round((coord - self.playStart) / self.gridSize).astype(int)
 
-    def send_msg(self, msg, end=None):
+    def send_msg(self, msg):
         try:
             self.idleCnt[msg] += 1
         except KeyError:
             self.idleCnt[msg] = 1
         if (self.idleCnt[msg] == 1):
-            print(msg, end=end)
+            logger.info(msg)
             for l in self.eventListeners:
                 l.on_monitor_error(msg)
         if (self.idleCnt[msg] > 10):
             self.idleCnt[msg] = 0
 
     def send_board_update_event(self, fen: str, moveSide: Side):
-        # print(f'board {fen} {moveSide}')
-        # print(f'      {self.lastBoardStr} {self.lastMoveSide}')
         if moveSide == Side.Unknow and self.forceNextSide != Side.Unknow:
             moveSide = self.forceNextSide.opponent
-            print(f'** Warning: Force moveside {moveSide}')
+            logger.warning(f'Force moveside {moveSide}')
         self.forceNextSide = Side.Unknow
         if fen != self.lastBoardStr or moveSide != self.lastMoveSide:
-            # print(self.board_str())
             for l in self.eventListeners:
                 l.on_board_updated(fen, moveSide, self.lastMovePosition)
         self.lastBoardStr = fen
@@ -356,14 +352,14 @@ class BoardMonitor:
                             moveSide = piece.side
                         curp = self.positions[row][col]
                         if (curp != '.'):
-                            print(f'** Error: Duplicated piece found at {row}:{col} {curp} -> {piece.symbol}')
+                            logger.warning(f'Duplicated piece found at {row}:{col} {curp} -> {piece.symbol}')
                         self.positions[row][col] = piece.symbol
                         if piece.name == 'King':
                             kingPos[piece.side] = (col,row)
                         break
 
         if kingPos[Side.Black] is None or kingPos[Side.White] is None:
-            print(f'** Error: KING is not found in both sides')
+            logger.warning(f'KING is not found in both sides')
             return
         
         self.mySide = Side.White if kingPos[Side.White][1] > kingPos[Side.Black][1] else Side.Black
@@ -374,42 +370,37 @@ class BoardMonitor:
         self.send_board_update_event(self.get_fen(), moveSide)
 
 
-    def scan_image_full(self, board_gray):
-        board = self.crop_image(board_gray)
-        self.clear_board()
+    # def scan_image_full(self, board_gray):
+    #     board = self.crop_image(board_gray)
+    #     self.clear_board()
 
-        if board is None:
-            self.send_msg("** Error : No Board found.")
-            self.lastBoardStr = ''
-            return
+    #     if board is None:
+    #         self.send_msg("** Error : No Board found.")
+    #         self.lastBoardStr = ''
+    #         return
 
-        self.lastMovePosition = self.scan_lastmove(board)
-        self.lastMoveSide = 'Unknown'
-        kingPos = {'Black': None, 'White': None}
-        # print(f'lastmove {lastMove}')
+    #     self.lastMovePosition = self.scan_lastmove(board)
+    #     self.lastMoveSide = 'Unknown'
+    #     kingPos = {'Black': None, 'White': None}
 
-        for _, piece in self.piecePatterns.items():
-            for pos in self.scan_piece(board, piece.gray):
-                # print(pos, pieceSym)
-                if np.array_equal(pos, self.lastMovePosition):
-                    self.lastMoveSide = piece.side
-                curp = self.positions[pos[1]][pos[0]]
-                if (curp != '.'):
-                    print(f'** Error: Duplicated piece found at {pos} {curp} -> {piece.symbol}')
-                self.positions[pos[1]][pos[0]] = piece.symbol
-                if piece.name == 'King':
-                    kingPos[piece.side] = pos
+    #     for _, piece in self.piecePatterns.items():
+    #         for pos in self.scan_piece(board, piece.gray):
+    #             if np.array_equal(pos, self.lastMovePosition):
+    #                 self.lastMoveSide = piece.side
+    #             curp = self.positions[pos[1]][pos[0]]
+    #             if (curp != '.'):
+    #                 logger.warning(f'** Error: Duplicated piece found at {pos} {curp} -> {piece.symbol}')
+    #             self.positions[pos[1]][pos[0]] = piece.symbol
+    #             if piece.name == 'King':
+    #                 kingPos[piece.side] = pos
 
-        if kingPos['Black'] is None or kingPos['White'] is None:
-            print(f'** Error: KING is not found in both sides')
-            return
+    #     if kingPos['Black'] is None or kingPos['White'] is None:
+    #         logger.warning(f'** Error: KING is not found in both sides')
+    #         return
         
-        self.mySide = 'White' if kingPos['White'][1] > kingPos['Black'][1] else 'Black'
-        # if self.lastMoveSide == 'Unknown':
-        #     print(f'** Error: move side unkown, assum my side move turn')
-        #     self.lastMoveSide = self.mySide
+    #     self.mySide = 'White' if kingPos['White'][1] > kingPos['Black'][1] else 'Black'
 
-        self.send_board_update_event()
+    #     self.send_board_update_event()
 
 
     def board_str(self):
@@ -460,30 +451,30 @@ class BoardMonitor:
         img = screen_cap(self.lastScanRegion)
         self.scan_image(img)
         # end = timer()
-        # print(end-start)
+        # logger.info(end-start)
 
     def start(self, delaySecond=0.1):
         self.stop()
 
         def polling():
             import time
-            print('** Info: ScreenMonitor started')
+            logger.info('ScreenMonitor started')
             while not self.stopPolling:
                 try:
                     self.screen_check()
                 except Exception as e:
-                    print('screen check failed', e)
+                    logger.warning('screen check failed', e)
                     break
                 time.sleep(delaySecond)
             self.pollingStopped.set()
             self.engine_thread = None
-            print('** Warn: ScreenMonitor stopped')
+            logger.warning('ScreenMonitor stopped')
         self.engine_thread = threading.Thread(target=polling, daemon=True)
         self.engine_thread.start()
 
     def stop(self):
         if self.engine_thread and self.engine_thread.is_alive():
-            print('** Info: Stopping monitor thread...')
+            logger.info('Stopping monitor thread...')
             self.stopPolling = True
             self.pollingStopped.wait()
             self.pollingStopped.clear()
@@ -496,4 +487,4 @@ class BoardMonitor:
     #     pos = find_pieces(board_gray)
     #     end = timer()
     #     print_board(pos)
-    #     print(end-start)
+    #     logger.info(end-start)
