@@ -5,7 +5,7 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException, NoSuchWindowException, WebDriverException, NoSuchElementException, StaleElementReferenceException
 from selenium import webdriver
 
-import threading, time, re, pathlib, sys, logging, argparse
+import threading, time, re, pathlib, sys, logging, argparse, tempfile
 from enum import StrEnum
 
 from HelperEngine import HelperEngine, MonitorFatal
@@ -26,10 +26,10 @@ logger.setLevel(logging.INFO)
 
 logFormatter = logging.Formatter('%(module)-20s: %(message)s')
 
-stream_handler = logging.StreamHandler()
-stream_handler.setLevel(loglevel)
-stream_handler.setFormatter(logFormatter)
-logger.addHandler(stream_handler)
+# stream_handler = logging.StreamHandler()
+# stream_handler.setLevel(loglevel)
+# stream_handler.setFormatter(logFormatter)
+# logger.addHandler(stream_handler)
 
 
 fileHandler = logging.FileHandler('helper.log', mode='w')
@@ -147,7 +147,9 @@ class ZigaHelper(HelperEngine):
             except:
                 pass
             try:
+                # userdir = tempfile.mkdtemp()
                 userdir = f'{pathlib.Path().absolute()}\\browser_cache'
+                logger.info(f'browser dir {userdir}')
                 options = webdriver.ChromeOptions()
                 options.add_argument(f"user-data-dir={userdir}")
                 if self.headless:

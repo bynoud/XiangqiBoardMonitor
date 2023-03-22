@@ -3,7 +3,7 @@ import tkinter.scrolledtext as tkst
 import queue
 from enum import Enum
 
-from FairyfishUCIAdapter import Engine, EngineEventListener, Move
+from EngineUCI import Engine, EngineEventListener, Move
 from BoardMonitor import BoardMonitor, BoardMonitorListener, Side
 
 DEFAULT_SIZE = 40
