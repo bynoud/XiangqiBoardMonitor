@@ -227,7 +227,7 @@ class BoardMonitor:
     mySide = Side.White
     lastMoveSide = Side.Unknow
     lastMovePosition = None
-    forceNextSide = Side.Unknow
+    forceMyMoveNext = False
 
     eventListeners: List[BoardMonitorListener] = []
     stopPolling = False
@@ -309,10 +309,10 @@ class BoardMonitor:
             self.idleCnt[msg] = 0
 
     def send_board_update_event(self, fen: str, moveSide: Side):
-        if moveSide == Side.Unknow and self.forceNextSide != Side.Unknow:
-            moveSide = self.forceNextSide.opponent
+        if moveSide == Side.Unknow and self.forceMyMoveNext:
+            moveSide = self.mySide.opponent
             logger.warning(f'Force moveside {moveSide}')
-        self.forceNextSide = Side.Unknow
+        self.forceMyMoveNext = False
         if fen != self.lastBoardStr or moveSide != self.lastMoveSide:
             for l in self.eventListeners:
                 l.on_board_updated(fen, moveSide, self.lastMovePosition)

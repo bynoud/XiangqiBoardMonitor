@@ -80,6 +80,8 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
                 raise Exception('The engine cannot restart:', e)
             self.restart(retry)
 
+    def forceMySideMoveNext(self):
+        self.monitor.forceMyMoveNext = True
 
     def send_guicmd(self, action: GUIActionCmd, params):
         self.guiUpdateAction.put(GUIAction(action, params))
@@ -156,6 +158,11 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
                 break
         self.send_guicmd(GUIActionCmd.Moves, moves)
         self.send_msg(f'Bestmove: {info.bestmove}')
+
+    def on_engine_fatal(self, msg):
+        logger.error(f'Engine fatal: {msg}. Restarting')
+        self.send_msg(f'Engine fatal, restarting...')
+        self.restart()
 
     def update_position(self, positions, newturn):
         pass

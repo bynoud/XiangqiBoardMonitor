@@ -10,6 +10,8 @@ from enum import StrEnum
 
 from HelperEngine import HelperEngine, MonitorFatal
 
+MYDEBUG = True
+
 # arguments & logging
 parser = argparse.ArgumentParser()
 parser.add_argument( '-log',
@@ -18,7 +20,7 @@ parser.add_argument( '-log',
                      help='Provide logging level. Example --loglevel debug, default=warning' )
 
 args = parser.parse_args()
-loglevel = args.loglevel.upper()
+loglevel = 'INFO' if MYDEBUG else args.loglevel.upper()
 
 
 logger = logging.getLogger()
@@ -53,7 +55,8 @@ logger.info(f'JSDIR {JSDIR}')
 def get_game_size(driver):
     try:
         canvas = driver.find_element(By.ID, GAME_CANVAS_ID)
-        return (int(canvas.get_attribute('width')), int(canvas.get_attribute('height')))
+        # return (int(canvas.get_attribute('width')), int(canvas.get_attribute('height')))
+        return (canvas.size['width'], canvas.size['height'])
     except:
         logging.error('no game canvas is found')
         return (1000,800)
@@ -64,6 +67,7 @@ ID_SIDE = 'xhSideContent'
 ID_CONTROL_MOVETIME = 'xhCtrlMovetime'
 ID_CONTROL_MULTIPV = 'xhCtrlMultipv'
 ID_CONTROL_LOGTEXT = 'xhCtrlLogtext'
+ID_CONTROL_MYMOVE = 'xhCtrlMymove'
 
 def read_js(filename, startPtn=None, endPtn=None):
     try:
@@ -198,6 +202,7 @@ class ZigaHelper(HelperEngine):
         self.movetimeEle = self.driver.find_element(By.ID, ID_CONTROL_MOVETIME)
         self.multipvEle = self.driver.find_element(By.ID, ID_CONTROL_MULTIPV) #.get_attribute('value')
         self.logareaEle = self.driver.find_element(By.ID, ID_CONTROL_LOGTEXT)
+        self.mymoveEle = self.driver.find_element(By.ID, ID_CONTROL_MYMOVE)
 
         sideEle = self.driver.find_element(By.ID, ID_SIDE)
         self.driver.set_window_size(W + 100 + int(sideEle.value_of_css_property('width')[:-2]), H+150)
@@ -211,6 +216,10 @@ class ZigaHelper(HelperEngine):
                     self.execute_gui_cmd()
                     self.set_option('movetime', self.movetimeEle.get_attribute('value'))
                     self.set_option('multipv', self.multipvEle.get_attribute('value'))
+                    if self.mymoveEle.is_selected():
+                        self.forceMySideMoveNext()
+                        self.add_log('Forced my side move next')
+                        self.mymoveEle.click()
                 except (NoSuchElementException, StaleElementReferenceException):
                     self.start(reload=True)
                     return

@@ -17,6 +17,7 @@ var ID_CANVAS = 'xhSideCanvas';
 var ID_CONTROL = 'xhControl';
 var ID_CONTROL_MOVETIME = 'xhCtrlMovetime';
 var ID_CONTROL_MULTIPV = 'xhCtrlMultipv';
+var ID_CONTROL_MYMOVE = 'xhCtrlMymove';
 var ID_CONTROL_LOGTEXT = 'xhCtrlLogtext';
 var ID_CONTROL_POPUPTEXT = 'xgPopupText';
 
@@ -94,10 +95,15 @@ addElement(controlDiv, 'label', null, {paddingInline: '10px'}).innerHTML = 'Move
 addElement(controlDiv, 'input', ID_CONTROL_MOVETIME,
             {width: '50px'},
             {type: 'number', onkeydown:"return false", value:movetime, min:1, max:15});
+
 addElement(controlDiv, 'label', null, {paddingInline: '10px'}).innerHTML = 'Multipv';
 addElement(controlDiv, 'input', ID_CONTROL_MULTIPV,
             {width: '50px'}, 
             {type: 'number', onkeydown:"return false", value:multipv, min:1, max:20});
+
+addElement(controlDiv, 'label', null, {paddingInline: '10px'}).innerHTML = 'MyMove';
+addElement(controlDiv, 'input', ID_CONTROL_MYMOVE,
+            {}, {type: 'checkbox', });
 
 // log
 var logDiv = addElement(sideDiv, 'div', null,

@@ -130,6 +130,9 @@ class EngineEventListener(ABC):
     @abstractmethod
     def on_move_calculated(self, fen, info):
         pass
+    @abstractmethod
+    def on_engine_fatal(self, msg):
+        pass
 
 class EngineCmdType(Enum):
     Quit = 0
@@ -157,7 +160,10 @@ class Engine():
         self.timeoutqueue = Queue()
 
         try:
-            self.process = subprocess.Popen([self.enginePath], stdin=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
+            self.process = subprocess.Popen([self.enginePath],
+                                            stdin=subprocess.PIPE, 
+                                            stdout=subprocess.PIPE, 
+                                            universal_newlines=True)
         except:
             logger.fatal(f'Engine cannot start from paht {self.enginePath}')
             exit()
@@ -239,8 +245,11 @@ class Engine():
                 try:
                     self.timeoutqueue.get_nowait()
                 except Empty:
-                    # logger.error(f'** Error: Timeout for "{x}"')
-                    raise Exception(f'** Error: Timeout for "{x}"')
+                    # logger.error(f'Timeout for "{x}"')
+                    # raise Exception(f'** Error: Timeout for "{x}"')
+                    for l in self.eventListeners:
+                        l.on_engine_fatal(f'Timeout for "{x}"')
+                        break
                     # break
         threading.Thread(target=check, daemon=True).start()
 
