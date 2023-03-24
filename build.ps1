@@ -1,1 +1,0 @@
-pyinstaller .\ZigaHelper.py --add-data="patterns;patterns" --add-data='js;js' --add-data='engine_exe;engine_exe' --onefile

@@ -3,7 +3,7 @@ from collections.abc import Iterable
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import List
-import time, sys, logging
+import time, sys, logging, os
 import subprocess
 import threading
 
@@ -19,6 +19,42 @@ DEBUG_INFO= dict(id=0)
 def get_debid():
     DEBUG_INFO['id'] = DEBUG_INFO['id']+1
     return DEBUG_INFO['id']
+
+# This subprocess is needed for pyinstaller --windowed
+# Create a set of arguments which make a ``subprocess.Popen`` (and
+# variants) call work with or without Pyinstaller, ``--noconsole`` or
+# not, on Windows and Linux. Typical use::
+#
+#   subprocess.call(['program_to_run', 'arg_1'], **subprocess_args())
+#
+# When calling ``check_output``::
+#
+#   subprocess.check_output(['program_to_run', 'arg_1'],
+#                           **subprocess_args(False))
+def subprocess_args():
+    # The following is true only on Windows.
+    if hasattr(subprocess, 'STARTUPINFO'):
+        # On Windows, subprocess calls will pop up a command window by default
+        # when run from Pyinstaller with the ``--noconsole`` option. Avoid this
+        # distraction.
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        ret = {'close_fds':True, # for window, need this so there's no dangling file handler
+               'env': os.environ, # Windows doesn't search the path by default. Pass it an environment so it will
+               'startupinfo': si,
+               }
+    else:
+        ret = {}
+
+    # On Windows, running this from the binary produced by Pyinstaller
+    # with the ``--noconsole`` option requires redirecting everything
+    # (stdin, stdout, stderr) to avoid an OSError exception
+    # "[Error 6] the handle is invalid."
+    ret.update({'stdin': subprocess.PIPE,
+                'stderr': subprocess.PIPE,
+                'stdout': subprocess.PIPE,
+                'universal_newlines':True})
+    return ret
 
 try:
     # PyInstaller creates a temp folder and stores path in _MEIPASS
@@ -166,10 +202,12 @@ class Engine():
         self.timeoutqueue = Queue()
 
         try:
-            self.process = subprocess.Popen([self.enginePath],
-                                            stdin=subprocess.PIPE, 
-                                            stdout=subprocess.PIPE, 
-                                            universal_newlines=True)
+            self.process = subprocess.Popen([self.enginePath], **subprocess_args())
+                                            # stdin=subprocess.PIPE, 
+                                            # stdout=subprocess.PIPE,
+                                            # stderr=subprocess.PIPE,
+                                            # close_fds=True, # for window, need this so there's no dangling file handler
+                                            # universal_newlines=True)
         except:
             logger.fatal(f'Engine cannot start from paht {self.enginePath}')
             exit()

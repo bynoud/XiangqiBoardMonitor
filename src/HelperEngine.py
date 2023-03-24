@@ -49,21 +49,18 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
                     logging.warning(f'Unknow option {name}')
 
 
-    def stop(self):
-        try:
-            self.engine.quit()
-            logger.info('Engine stopped')
-        except:
-            pass
-        try:
-            self.monitor.stop()
-            logger.info('Monitor stopped')
-        except:
-            pass
-
     def restart(self, retry=5):
         try:
-            self.stop()
+            try:
+                self.engine.quit()
+                logger.info('Engine stopped')
+            except:
+                pass
+            try:
+                self.monitor.stop()
+                logger.info('Monitor stopped')
+            except:
+                pass
             # self.lastFen = ''
             self.lastFenFull = ''
             self.engine = Engine()

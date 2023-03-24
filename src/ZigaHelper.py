@@ -3,9 +3,10 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException, NoSuchWindowException, WebDriverException, NoSuchElementException, StaleElementReferenceException
+from selenium.webdriver.chrome.service import Service
 from selenium import webdriver
 
-import threading, time, re, pathlib, sys, logging, argparse, tempfile
+import threading, time, re, pathlib, sys, logging, argparse, subprocess
 from enum import StrEnum
 
 from HelperEngine import HelperEngine, MonitorFatal
@@ -142,7 +143,7 @@ class ZigaHelper(HelperEngine):
         self.driver.get('https://google.com')
         self.build_gui()
 
-    def start(self, reload=False):
+    def load_gui(self, reload=False):
         if not reload:
             logger.info('** Web starting...')
             try:
@@ -163,7 +164,9 @@ class ZigaHelper(HelperEngine):
                     options.add_experimental_option('excludeSwitches', ['enable-logging']) #
                     options.add_argument(f"--app={APP_URL}")
                     options.add_argument('--enable-extensions')
-                self.driver = webdriver.Chrome(options=options)
+                service = Service()
+                service.creation_flags |= subprocess.CREATE_NO_WINDOW # This is needed when use pyinstaller --nowindowed build
+                self.driver = webdriver.Chrome(options=options, service=service)
                 if self.headless:
                     self.driver.get(APP_URL)
             except NoSuchWindowException:
@@ -173,13 +176,11 @@ class ZigaHelper(HelperEngine):
             self.driver.get(APP_URL)
         self.restart()
         self.build_gui()
-        if not self.headless:
-            self.start_gui_polling()
 
-    def stop(self):
-        logger.info('GUI Exitting')
-        # pickle.dump(self.driver.get_cookies(), open(COOKIE_FILE, "wb"))
-        super().stop()
+    # def stop(self):
+    #     # pickle.dump(self.driver.get_cookies(), open(COOKIE_FILE, "wb"))
+    #     logger.info('GUI Exitting')
+    #     # exit()
 
 
     @property
@@ -198,39 +199,40 @@ class ZigaHelper(HelperEngine):
         self.exe_script(read_js('gui_inject.js'), dict(originalWidth=W, **self.guiOptions))
         self.exe_js_func(JsFunc.DRAW_BOARD)
 
-        # WebDriverWait(self.driver, 2).until(EC.presence_of_element_located((By.ID, ID_SIDE)))
+        WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, ID_SIDE)))
+        sideEle = self.driver.find_element(By.ID, ID_SIDE)
+        self.driver.set_window_size(W + 100 + int(sideEle.value_of_css_property('width')[:-2]), H+150)
+
         self.movetimeEle = self.driver.find_element(By.ID, ID_CONTROL_MOVETIME)
         self.multipvEle = self.driver.find_element(By.ID, ID_CONTROL_MULTIPV) #.get_attribute('value')
         self.logareaEle = self.driver.find_element(By.ID, ID_CONTROL_LOGTEXT)
         self.mymoveEle = self.driver.find_element(By.ID, ID_CONTROL_MYMOVE)
 
-        sideEle = self.driver.find_element(By.ID, ID_SIDE)
-        self.driver.set_window_size(W + 100 + int(sideEle.value_of_css_property('width')[:-2]), H+150)
 
+    def main_loop(self):
+        logger.info(f'GUI start {self.guiOptions}')
+        while not self.is_stopped:
+            try:
+                self.execute_gui_cmd()
+                self.set_option('movetime', self.movetimeEle.get_attribute('value'))
+                self.set_option('multipv', self.multipvEle.get_attribute('value'))
+                if self.mymoveEle.is_selected():
+                    self.forceMySideMoveNext()
+                    self.add_log('Forced my side move next')
+                    self.mymoveEle.click()
+            except (NoSuchElementException, StaleElementReferenceException):
+                self.load_gui(reload=True)
+            except WebDriverException as e:
+                logger.fatal(f'Error during GUI handling : {e}')
+                break
+                # if not self.is_stopped:
+                #     self.start(reload=False)
+                # return
+            time.sleep(0.5)
+        logger.warning('GUI exitting')
 
-    def start_gui_polling(self):
-        def poll():
-            logger.info(f'GUI polling start {self.guiOptions}')
-            while not self.is_stopped:
-                try:
-                    self.execute_gui_cmd()
-                    self.set_option('movetime', self.movetimeEle.get_attribute('value'))
-                    self.set_option('multipv', self.multipvEle.get_attribute('value'))
-                    if self.mymoveEle.is_selected():
-                        self.forceMySideMoveNext()
-                        self.add_log('Forced my side move next')
-                        self.mymoveEle.click()
-                except (NoSuchElementException, StaleElementReferenceException):
-                    self.start(reload=True)
-                    return
-                except WebDriverException as e:
-                    logger.fatal(f'Error during GUI handling : {e}')
-                    # if not self.is_stopped:
-                    #     self.start(reload=False)
-                    # return
-                time.sleep(0.5)
-            self.stop()
-        threading.Thread(target=poll).start()
+    def bg_loop(self):
+        threading.Thread(target=self.main_loop).start()
 
     def on_monitor_fatal(self, type: MonitorFatal):
         match type:
@@ -309,4 +311,7 @@ class ZigaHelper(HelperEngine):
 
 if __name__ == "__main__":
     x = ZigaHelper()
-    x.start()
+    x.load_gui()
+    x.main_loop()
+    print('xxx')
+    sys.exit()
