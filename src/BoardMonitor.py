@@ -247,6 +247,8 @@ class BoardMonitor:
         self.patternOffset = [[np.multiply(self.gridSize, (i,j)) + self.playStart - np.divide(self.gridSize,2)
                                for i in range(GRID_WIDTH)] for j in range(GRID_HEIGHT)] # [Y,X]
 
+    def is_myside(self, side:Side):
+        return False if side==Side.Unknow else side==self.mySide
 
     def add_event_listener(self, listener: BoardMonitorListener):
         self.eventListeners.append(listener)

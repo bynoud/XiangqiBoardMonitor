@@ -64,7 +64,7 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
     def restart(self, retry=5):
         try:
             self.stop()
-            self.lastFen = ''
+            # self.lastFen = ''
             self.lastFenFull = ''
             self.engine = Engine()
             self.engine.add_event_listener(self)
@@ -109,27 +109,27 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
 
     # Monitor callback
     def on_board_updated(self, fen: str, moveSide: Side, lastmovePosition):
-        if moveSide == Side.Unknow:
+        # if moveSide == Side.Unknow:
 
-            if self.lastFen == fen:
-                logger.warning(f'Unkown move side with same fen. Ignored')
-                return
-            else:
-                logger.warning(f'Unkown move side. Assume not is me')
-                moveSide = self.monitor.mySide
+        #     if self.lastFen == fen:
+        #         logger.warning(f'Unkown move side with same fen. Ignored')
+        #         return
+        #     # else:
+        #     #     logger.warning(f'Unkown move side. Assume not is me')
+        #     #     moveSide = self.monitor.mySide
+        # self.lastFen = fen
 
-        self.lastFen = fen
         nextSide = moveSide.opponent
-        newturn = nextSide == self.monitor.mySide
+        myturn = self.monitor.is_myside(nextSide)
 
         # update gui
-        self.send_guicmd(GUIActionCmd.Position, [self.monitor.positions, lastmovePosition, newturn])
+        self.send_guicmd(GUIActionCmd.Position, [self.monitor.positions, lastmovePosition, myturn])
 
-        myturn = self.help and nextSide == self.monitor.mySide
-        # no point to set position if we don't neef the move generate
-        if myturn:
-            self.lastFenFull = f'{fen} {nextSide.fen} - - 0 1'
-            self.engine.start_next_move(self.lastFenFull)
+        if myturn and self.help:
+            fenfull = f'{fen} {nextSide.fen} - - 0 1'
+            if self.lastFenFull != fenfull:
+                self.lastFenFull = fenfull
+                self.engine.start_next_move(fenfull)
 
     def on_monitor_error(self, msg):
         self.send_msg(msg)

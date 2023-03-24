@@ -1,6 +1,7 @@
 browser_cache
 build
 dist
+*/local_*
 *.log
 .venv
 __pycache__

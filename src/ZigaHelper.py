@@ -28,10 +28,10 @@ logger.setLevel(logging.INFO)
 
 logFormatter = logging.Formatter('%(module)-20s: %(message)s')
 
-# stream_handler = logging.StreamHandler()
-# stream_handler.setLevel(loglevel)
-# stream_handler.setFormatter(logFormatter)
-# logger.addHandler(stream_handler)
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(loglevel)
+stream_handler.setFormatter(logFormatter)
+logger.addHandler(stream_handler)
 
 
 fileHandler = logging.FileHandler('helper.log', mode='w')
@@ -126,13 +126,13 @@ class ZigaHelper(HelperEngine):
         try:
             self.driver.execute_script(src, *param)
         except Exception as e:
-            logger.warning(f'Error during execute script: {src[:80]}...\n{e}')
+            logger.warning(f'Error during execute script: {src[:80]}...')
 
     def exe_js_func(self, jsfunc: JsFunc, param={}):
         try:
             self.driver.execute_script(f'{self.js_vars}\n{jsfunc.value}({param})')
         except Exception as e:
-            logger.warning(f'Error during execute func: {jsfunc} {param}...\n{e}')
+            logger.warning(f'Error during execute func: {jsfunc} {param}...')
 
     def test(self):
         options = webdriver.ChromeOptions()

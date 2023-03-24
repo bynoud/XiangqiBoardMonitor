@@ -15,6 +15,11 @@ DEFAULT_OPT = {'UCI_Variant':'xiangqi', 'UCI_Elo': 2850}
 ENGINE_EXE_NAME = 'fairy-stockfish_x86-64-bmi2.exe'
 # DEFAULT_ENGPATH = 'engine_exe/fairy-stockfish_x86-64-bmi2.exe'
 
+DEBUG_INFO= dict(id=0)
+def get_debid():
+    DEBUG_INFO['id'] = DEBUG_INFO['id']+1
+    return DEBUG_INFO['id']
+
 try:
     # PyInstaller creates a temp folder and stores path in _MEIPASS
     DEFAULT_ENGPATH = f'{sys._MEIPASS}/engine_exe/{ENGINE_EXE_NAME}'
@@ -149,6 +154,7 @@ class EngineCmd:
 class Engine():
 
     def __init__(self, enginePath=DEFAULT_ENGPATH, options=None):
+        self.debid = get_debid()
         self.enginePath = enginePath
         self.options = DEFAULT_OPT if options is None else {**DEFAULT_OPT, **options}
         self.uci_movetime = 2000
@@ -236,20 +242,29 @@ class Engine():
         self.send_cmd(EngineCmdType.Quit)
         # self.write('quit\n')
 
+    def send_event_fatal(self, msg):
+        if self.stopping:
+            return
+        for l in self.eventListeners:
+            l.on_engine_fatal(msg)
 
     def start_timeout_check(self):
         def check():
             while True:
                 x = self.timeoutqueue.get()
-                time.sleep(20)
+                logger.info(f'Timeout check start {self.debid} {x}')
                 try:
-                    self.timeoutqueue.get_nowait()
+                    x2 = self.timeoutqueue.get(timeout=20)
+                    if x2 != x:
+                         logger.fatal(f'Timeout mismtach "{x}" "{x2}"')
+                         exit()
+                    else:
+                        logger.info(f'Timeout check done {self.debid} {x}')
                 except Empty:
                     # logger.error(f'Timeout for "{x}"')
                     # raise Exception(f'** Error: Timeout for "{x}"')
-                    for l in self.eventListeners:
-                        l.on_engine_fatal(f'Timeout for "{x}"')
-                        break
+                    self.send_event_fatal(f'Timeout for "{x}"')
+                    break
                     # break
         threading.Thread(target=check, daemon=True).start()
 
@@ -304,10 +319,11 @@ class Engine():
         # dont need the lock, we only handle the UCI in one thread
         self.write_nolock('stop\n')
         # this will be blocked until the last active fen got the bestmove
+        logger.info(f'Start process move {self.debid} "{fen}"')
         self.timeoutqueue.put(fen) # start timeout
         self.activefen.put(fen)
         self.timeoutqueue.put(fen) # stop timeout
-        logger.info(f'Get move for {self.uci_movetime} "{fen}" ...')
+        logger.info(f'Get move for {self.debid} {self.uci_movetime} "{fen}" ...')
         self.write_nolock('ucinewgame\n',
                           f'position fen {fen}\n',
                           f'go movetime {self.uci_movetime}\n')
@@ -319,16 +335,18 @@ class Engine():
             logfile = open('debug.log', 'w')
             try:
                 # for line in self.read():
-                lastline = ''
                 repeatcnt = 0
                 while not self.stopping:
                     line = self.process.stdout.readline()
                     logfile.write(line)
-                    if line==lastline:
+                    if line=='':
                         repeatcnt += 1
                         if repeatcnt > 100:
-                            logger.warn(f'Failed here')
+                            # logger.warn(f'Failed here')
+                            self.send_event_fatal('UCI output empty')
                             break
+                    else:
+                        repeatcnt = 0
                     items = line.split()
                     if len(items) == 0:
                         continue
