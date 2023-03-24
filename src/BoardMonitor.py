@@ -234,6 +234,7 @@ class BoardMonitor:
     pollingStopped = threading.Event()
     engine_thread = None
 
+    fatalCnt: Dict[MonitorFatal, int] = {}
     
 
     def __init__(self) -> None:
@@ -322,8 +323,14 @@ class BoardMonitor:
         self.lastMoveSide = moveSide
 
     def send_board_fatal(self, type: MonitorFatal):
-        for l in self.eventListeners:
-            l.on_monitor_fatal(type)
+        try:
+            self.fatalCnt[type] += 1
+        except KeyError:
+            self.fatalCnt[type] = 1
+        if self.fatalCnt[type] > 4:
+            self.fatalCnt[type] = 0
+            for l in self.eventListeners:
+                l.on_monitor_fatal(type)
 
     # a little bit faster, but still slow thouigh...
     def scan_image(self, board_gray):
@@ -335,6 +342,7 @@ class BoardMonitor:
             self.send_board_fatal(MonitorFatal.NoBoardFound)
             self.lastBoardStr = ''
             return
+        self.fatalCnt[MonitorFatal.NoBoardFound] = 0
 
         self.lastMovePosition = self.scan_lastmove(board)
         moveSide = Side.Unknow

@@ -115,16 +115,21 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
         #     #     logger.warning(f'Unkown move side. Assume not is me')
         #     #     moveSide = self.monitor.mySide
         # self.lastFen = fen
+        logger.info(f'board updated {moveSide} {fen}')
 
-        nextSide = moveSide.opponent
-        myturn = self.monitor.is_myside(nextSide)
+        if moveSide == Side.Unknow:
+            self.send_guicmd(GUIActionCmd.Position, [self.monitor.positions, lastmovePosition, False])
 
-        # update gui
-        self.send_guicmd(GUIActionCmd.Position, [self.monitor.positions, lastmovePosition, myturn])
-
-        if myturn and self.help:
+        else:
+            nextSide = moveSide.opponent
             fenfull = f'{fen} {nextSide.fen} - - 0 1'
-            if self.lastFenFull != fenfull:
+
+            if self.lastFenFull == fenfull:
+                return
+
+            myturn = self.monitor.is_myside(nextSide)
+            self.send_guicmd(GUIActionCmd.Position, [self.monitor.positions, lastmovePosition, myturn])
+            if myturn and self.help:
                 self.lastFenFull = fenfull
                 self.engine.start_next_move(fenfull)
 
