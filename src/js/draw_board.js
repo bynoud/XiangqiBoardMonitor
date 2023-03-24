@@ -1,4 +1,13 @@
 
+PIECE_SYMBOL = {
+    K: '帥', k: '將',
+    A: '仕', a: '士',
+    B: '相', b: '象',
+    R: '俥', r: '車',
+    C: '炮', c: '砲',
+    N: '傌', n: '馬',
+    P: '兵', p: '卒',
+}
 
 function draw_board() {
 
@@ -109,9 +118,11 @@ function update_position({positions, lastmove, movelist}) {
 
 function draw_position(ctx, positions) {
     let rad = Math.floor(gridSize*0.4);
+    let fontsize = Math.floor(gridSize*0.45);
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    ctx.font = `bold ${gridSize/2}px sans-serif`;
+    // ctx.font = `bold ${gridSize/2}px sans-serif`;
+    ctx.font = `${fontsize}px sans-serif`;
     for (let x=0; x<BOARD_WIDHT; x++) {
         for (let y=0; y<BOARD_HEIGH; y++) {
             let p = positions[y][x];
@@ -136,7 +147,8 @@ function draw_piece(ctx, rad, sym, x, y) {
 
     // label
     ctx.fillStyle = '#eaeaea';
-    ctx.fillText(sym, cx, cy);
+    // ctx.fillText(sym, cx, cy);
+    ctx.fillText(PIECE_SYMBOL[sym], cx, cy);
 
 }
 
@@ -172,7 +184,9 @@ function draw_movelist(ctx, movelist) {
     // let ctx = draw_board();
     // update_position({positions, lastmove});
     // movelist.forEach((move, index) => {
-    for (let index = 0; index < movelist.length; index++) {
+    // for (let index = 0; index < movelist.length; index++) {
+    // need draw in reverse, so the importance move is not overshadow
+    for (let index = movelist.length-1; index >= 0; index--) {
         move = movelist[index];
         // console.error(index, move);
         draw_arrow(ctx, 

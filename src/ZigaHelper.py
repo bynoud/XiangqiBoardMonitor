@@ -72,7 +72,7 @@ ID_CONTROL_MYMOVE = 'xhCtrlMymove'
 
 def read_js(filename, startPtn=None, endPtn=None):
     try:
-        with open(f'{JSDIR}/{filename}') as f:
+        with open(f'{JSDIR}/{filename}', encoding='utf-8') as f:
             data = f.read()
         if startPtn is not None:
             x = re.match(f'.*^\s*// {startPtn}\s*\n(.*)\n\s*// {endPtn}.*', data, re.MULTILINE|re.DOTALL)
@@ -89,6 +89,7 @@ class JsFunc(StrEnum):
     DRAW_BOARD = 'draw_board'
     SHOW_POPUP = 'show_popup'
     POSITION = 'update_position'
+
 
 class ZigaHelper(HelperEngine):
     def __init__(self, headless=False) -> None:
@@ -127,13 +128,14 @@ class ZigaHelper(HelperEngine):
         try:
             self.driver.execute_script(src, *param)
         except Exception as e:
-            logger.warning(f'Error during execute script: {src[:80]}...')
+            logger.warning(f'Error during execute script: {src[:80]}...: {e.args}')
 
     def exe_js_func(self, jsfunc: JsFunc, param={}):
         try:
             self.driver.execute_script(f'{self.js_vars}\n{jsfunc.value}({param})')
         except Exception as e:
-            logger.warning(f'Error during execute func: {jsfunc} {param}...')
+            logger.exception()
+            logger.warning(f'Error during execute func: {jsfunc} {param}...: {e.args}')
 
     def test(self):
         options = webdriver.ChromeOptions()
@@ -223,7 +225,7 @@ class ZigaHelper(HelperEngine):
             except (NoSuchElementException, StaleElementReferenceException):
                 self.load_gui(reload=True)
             except WebDriverException as e:
-                logger.fatal(f'Error during GUI handling : {e}')
+                logger.fatal(f'Error during GUI handling : {e.args}')
                 break
                 # if not self.is_stopped:
                 #     self.start(reload=False)
@@ -313,5 +315,4 @@ if __name__ == "__main__":
     x = ZigaHelper()
     x.load_gui()
     x.main_loop()
-    print('xxx')
     sys.exit()
