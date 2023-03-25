@@ -9,6 +9,8 @@ import threading
 
 from pprint import PrettyPrinter
 
+from gvars import flog
+
 logger = logging.getLogger()
 
 DEFAULT_OPT = {'UCI_Variant':'xiangqi', 'UCI_Elo': 2850}
@@ -226,6 +228,7 @@ class Engine():
 
     def write_nolock(self, *messages):
         for msg in messages:
+            flog('uci_cmdlog', msg)
             self.process.stdin.write(msg)
             self.process.stdin.flush()
 
@@ -290,14 +293,14 @@ class Engine():
         def check():
             while True:
                 x = self.timeoutqueue.get()
-                logger.info(f'Timeout check start {self.debid} {x}')
+                # logger.info(f'Timeout check start {self.debid} {x}')
                 try:
                     x2 = self.timeoutqueue.get(timeout=20)
                     if x2 != x:
                          logger.fatal(f'Timeout mismtach "{x}" "{x2}"')
                          exit()
-                    else:
-                        logger.info(f'Timeout check done {self.debid} {x}')
+                    # else:
+                    #     logger.info(f'Timeout check done {self.debid} {x}')
                 except Empty:
                     # logger.error(f'Timeout for "{x}"')
                     # raise Exception(f'** Error: Timeout for "{x}"')
@@ -370,21 +373,21 @@ class Engine():
     def start_output_handler(self):
         def read_output():
             infos = []
-            logfile = open('debug.log', 'w')
             try:
                 # for line in self.read():
-                repeatcnt = 0
+                # repeatcnt = 0
                 while not self.stopping:
                     line = self.process.stdout.readline()
-                    logfile.write(line)
-                    if line=='':
-                        repeatcnt += 1
-                        if repeatcnt > 100:
-                            # logger.warn(f'Failed here')
-                            self.send_event_fatal('UCI output empty')
-                            break
-                    else:
-                        repeatcnt = 0
+                    flog('uci_outlog',line)
+                    # if line=='':
+                    #     repeatcnt += 1
+                    #     if repeatcnt > 100:
+                    #         # logger.warn(f'Failed here')
+                    #         flog('uci_outlog','------------ UCI output empty ----------')
+                    #         self.send_event_fatal('UCI output empty')
+                    #         break
+                    # else:
+                    #     repeatcnt = 0
                     items = line.split()
                     if len(items) == 0:
                         continue
@@ -407,7 +410,8 @@ class Engine():
                 pass
 
             logger.warning('Adapter thread closed')
-            logfile.close()
+            if not self.stopping:
+                self.send_event_fatal('UCI stopped unexpected')
 
         # def read_error():
         #     while self.process.poll() is None:

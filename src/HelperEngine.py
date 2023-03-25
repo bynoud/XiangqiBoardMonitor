@@ -48,19 +48,21 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
                 case _:
                     logging.warning(f'Unknow option {name}')
 
-
-    def restart(self, retry=5):
+    def stop_engine(self):
         try:
-            try:
-                self.engine.quit()
-                logger.info('Engine stopped')
-            except:
-                pass
-            try:
-                self.monitor.stop()
-                logger.info('Monitor stopped')
-            except:
-                pass
+            self.engine.quit()
+            logger.info('Engine stopped')
+        except:
+            pass
+        try:
+            self.monitor.stop()
+            logger.info('Monitor stopped')
+        except:
+            pass
+
+    def restart(self, retry=5, isrestart=False):
+        self.stop_engine()
+        try:
             # self.lastFen = ''
             self.lastFenFull = ''
             self.engine = Engine()
@@ -75,9 +77,10 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
             retry -= 1
             if retry <= 0:
                 raise Exception('The engine cannot restart:', e)
-            self.restart(retry)
+            self.restart(retry, isrestart)
 
     def forceMySideMoveNext(self):
+        self.lastFenFull = ''
         self.monitor.forceMyMoveNext = True
 
     def send_guicmd(self, action: GUIActionCmd, params):
@@ -164,7 +167,7 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
     def on_engine_fatal(self, msg):
         logger.error(f'Engine fatal: {msg}. Restarting')
         self.send_msg(f'Engine fatal, restarting...')
-        self.restart()
+        self.restart(isrestart=True)
 
     def update_position(self, positions, newturn):
         pass

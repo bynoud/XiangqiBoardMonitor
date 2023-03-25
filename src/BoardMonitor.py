@@ -315,10 +315,10 @@ class BoardMonitor:
         if moveSide == Side.Unknow and self.forceMyMoveNext:
             moveSide = self.mySide.opponent
             logger.warning(f'Force moveside {moveSide}')
-        self.forceMyMoveNext = False
-        if fen != self.lastBoardStr or moveSide != self.lastMoveSide:
+        if self.forceMyMoveNext or fen != self.lastBoardStr or moveSide != self.lastMoveSide:
             for l in self.eventListeners:
                 l.on_board_updated(fen, moveSide, self.lastMovePosition)
+        self.forceMyMoveNext = False
         self.lastBoardStr = fen
         self.lastMoveSide = moveSide
 
@@ -473,7 +473,7 @@ class BoardMonitor:
                 try:
                     self.screen_check()
                 except Exception as e:
-                    logger.warning('screen check failed', e)
+                    logger.warning(f'screen check failed {e.args}')
                     break
                 time.sleep(delaySecond)
             self.pollingStopped.set()

@@ -9,35 +9,38 @@ from selenium import webdriver
 import threading, time, re, pathlib, sys, logging, argparse, subprocess
 from enum import StrEnum
 
+import gvars
+
 from HelperEngine import HelperEngine, MonitorFatal
 
-MYDEBUG = True
+# MYDEBUG = True
 
-# arguments & logging
-parser = argparse.ArgumentParser()
-parser.add_argument( '-log',
-                     '--loglevel',
-                     default='error',
-                     help='Provide logging level. Example --loglevel debug, default=warning' )
+# # arguments & logging
+# parser = argparse.ArgumentParser()
+# parser.add_argument( '-log',
+#                      '--loglevel',
+#                      default='error',
+#                      help='Provide logging level. Example --loglevel debug, default=warning' )
 
-args = parser.parse_args()
-loglevel = 'INFO' if MYDEBUG else args.loglevel.upper()
+# args = parser.parse_args()
+# loglevel = 'INFO' if MYDEBUG else args.loglevel.upper()
 
 
+# logger = logging.getLogger()
+# logger.setLevel(logging.INFO)
+
+# logFormatter = logging.Formatter('%(module)-20s: %(message)s')
+
+# stream_handler = logging.StreamHandler()
+# stream_handler.setLevel(loglevel)
+# stream_handler.setFormatter(logFormatter)
+# logger.addHandler(stream_handler)
+
+
+# fileHandler = logging.FileHandler('helper.log', mode='w')
+# fileHandler.setFormatter(logFormatter)
+# logger.addHandler(fileHandler)
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-logFormatter = logging.Formatter('%(module)-20s: %(message)s')
-
-stream_handler = logging.StreamHandler()
-stream_handler.setLevel(loglevel)
-stream_handler.setFormatter(logFormatter)
-logger.addHandler(stream_handler)
-
-
-fileHandler = logging.FileHandler('helper.log', mode='w')
-fileHandler.setFormatter(logFormatter)
-logger.addHandler(fileHandler)
 
 ##################
 
@@ -134,7 +137,6 @@ class ZigaHelper(HelperEngine):
         try:
             self.driver.execute_script(f'{self.js_vars}\n{jsfunc.value}({param})')
         except Exception as e:
-            logger.exception()
             logger.warning(f'Error during execute func: {jsfunc} {param}...: {e.args}')
 
     def test(self):
@@ -176,13 +178,13 @@ class ZigaHelper(HelperEngine):
         else:
             logger.info('** Reloading')
             self.driver.get(APP_URL)
-        self.restart()
+        self.restart(isrestart=reload)
         self.build_gui()
 
-    # def stop(self):
-    #     # pickle.dump(self.driver.get_cookies(), open(COOKIE_FILE, "wb"))
-    #     logger.info('GUI Exitting')
-    #     # exit()
+    def stop(self):
+        # pickle.dump(self.driver.get_cookies(), open(COOKIE_FILE, "wb"))
+        logger.warning('GUI Exitting')
+        self.stop_engine()
 
 
     @property
@@ -231,7 +233,7 @@ class ZigaHelper(HelperEngine):
                 #     self.start(reload=False)
                 # return
             time.sleep(0.5)
-        logger.warning('GUI exitting')
+        self.stop()
 
     def bg_loop(self):
         threading.Thread(target=self.main_loop).start()
@@ -315,4 +317,5 @@ if __name__ == "__main__":
     x = ZigaHelper()
     x.load_gui()
     x.main_loop()
+    gvars.cleanup()
     sys.exit()
