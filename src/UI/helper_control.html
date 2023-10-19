@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+
+<head lang="en">
+    <meta charset="UTF-8">
+</head>
+
+<body style="margin:0">
+    <!-- <button title="Hi" onclick="sayhi()">HHH</button> -->
+    <p id="debugText"></p>
+    <button title="Reload" onclick="NP_reload_page()">Reload</button>
+    <script>
+        function sayhi() {
+            var deb = document.getElementById("debugText");
+            deb.innerHTML = "sayhi";
+            NP_py_hi("fromjs").then(function (r) {
+                console.log("from py: ", r)
+            });
+        }
+        function callme(msg) {
+            console.log("called", msg);
+            return "jsbacked";
+        }
+
+        function set_log(logs) {
+            var logele = document.getElementById("xhCtrlLogtext");
+            logele.value = logs.join("\n");
+            logele.scrollTop = logele.scrollHeight;
+        }
+    </script>
+
+    <script>
+        // var img = new Image();
+        // img.onload = function(){
+        //     var ctx = document.getElementById("setupCanvas").getContext("2d");
+        //     ctx.canvas.width = img.width;
+        //     ctx.canvas.height = img.height;
+        //     ctx.drawImage(img,0,0);
+        //     ctx.drawImage(img,0,0);
+        // };
+        // img.src = "b.png";  
+        var setupImgPath = "";
+        function setupImage({path, circles}) {
+            setupImgPath = path;
+            drawSetupImage(circles);
+        }
+
+        var setupCircles = [];
+        // function setupCanvasHandler(event) {
+        //     console.log("click", event)
+        //     var ctx = document.getElementById("setupCanvas");
+        //     setupCircles.forEach(c => {
+        //         if (ctx.isPointInPath(c, event.clientX, event.clientY)) {
+        //             console.log(`you are inside the circle ${i} ${circles[i]}`);
+        //         }
+        //     });
+        // }
+        window.onload = () => {
+            const canvas = document.getElementById("setupCanvas");
+            const ctx = canvas.getContext("2d");
+            canvas.addEventListener("click", event => {
+                for (const i in setupCircles) {
+                    const c = setupCircles[i];
+                    const rect = event.target.getBoundingClientRect();
+                    const cx = event.clientX - rect.left;
+                    const cy = event.clientY - rect.top;
+                    // if (ctx.isPointInPath(c, event.clientX, event.clientY)) {
+                    //     console.log(`you are inside the circle ${i} ${circles[i]}`);
+                    // }
+                    if ( cx >= c[0]-c[2] && cx <= c[0]+c[2] &&
+                         cy >= c[1]-c[2] && cy <= c[1]+c[2]) {
+                            console.log(`you are inside the circle ${i} ${c}`);
+                         }
+                }
+            })
+        }
+
+        function drawSetupImage(circles=[]) {
+            var img = new Image();
+            console.log('drawing', circles)
+            img.onload = function(){
+                const canvas = document.getElementById("setupCanvas");
+                const ctx = canvas.getContext("2d");
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img,0,0);
+                ctx.drawImage(img,0,0);
+
+                setupCircles = circles;
+                for(const i in circles) {
+                    var c = drawCircles(ctx, circles[i][0], circles[i][1], circles[i][2]);
+                    // setupCircles.push(c);
+                    // canvas.addEventListener("click", function(event) {
+                    //     console.log("click", event)
+                    //     if (ctx.isPointInPath(c, event.clientX, event.clientY)) {
+                    //         console.log(`you are inside the circle ${i} ${circles[i]}`);
+                    //     }
+                    // });
+                }
+                document.getElementById("setupCirclesCount").innerHTML = circles.length;
+            };
+            img.src = setupImgPath;  
+            
+        }
+
+        function drawCircles(context, centerX, centerY, radius) {
+            const c = new Path2D();
+            c.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+            // context.beginPath();
+            // context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
+            // context.fillStyle = 'red';
+            // context.fill();
+            context.lineWidth = 5;
+            context.strokeStyle = 'red';
+            context.stroke(c);
+            return c;
+        }
+
+        function setupInit(val) {
+            console.log("setupinit", val);
+            for (var v in val) {
+                var slider = document.getElementById(v);
+                var output = document.getElementById(`${v}Value`);
+                slider.value = val[v];
+                output.innerHTML = val[v];
+            }
+        }
+
+        function setupSlider(name) {
+            var slider = document.getElementById(name);
+            var output = document.getElementById(`${name}Value`);
+            output.innerHTML = slider.value;
+            slider.onchange = function() {
+                output.innerHTML = this.value;
+                NP_setup_value_changed({name:name, value:this.value})
+                    .then(r => drawSetupImage(r))
+            }
+        }
+    </script>
+    <div hidden="true">
+        <div class="setupControl">
+            <input type="range" min="1" max="500" value="10" class="slider" id="setupParam1">
+            Param1: <span id="setupParam1Value"></span>
+            <script> setupSlider("setupParam1")</script>
+        </div>
+        <div class="setupControl">
+            <input type="range" min="1" max="100" value="60" class="slider" id="setupParam2">
+            Param2: <span id="setupParam2Value"></span>
+            <script>setupSlider("setupParam2")</script>
+        </div>
+        
+        <div class="setupControl">
+            <input type="range" min="1" max="100" value="10" class="slider" id="minRadius">
+            minRadius: <span id="minRadiusValue"></span>
+            <script>setupSlider("minRadius")</script>
+        </div>
+        <div class="setupControl">
+            <input type="range" min="20" max="200" value="70" class="slider" id="maxRadius">
+            maxRadius: <span id="maxRadiusValue"></span>
+            <script>setupSlider("maxRadius")</script>
+        </div>
+        <div><span id="setupCirclesCount"></span></div>
+
+        <canvas id="setupCanvas"></canvas>
+    </div>
+
+    <div id="xhSideContent" style="background: rgb(227, 246, 245);">
+        <div style="vertical-align: top;">
+            <div style="height: 420px; width: 380px; margin: 5px"><canvas id="xhSideCanvas" width="380" height="420"
+                    style="z-index: 8; position: absolute; border: 1px solid;"></canvas>
+                <div style="position: absolute; width: 380px;">
+                    <p id="xgPopupText"
+                        style="text-align: center; vertical-align: middle; line-height: 420px; margin: 0; font-size: 40px; font-family: sans-serif; font-weight: bold; color: red;">
+                        No Board detected</p>
+                </div>
+            </div>
+            <div id="xhControl" style="padding: 10px;">
+                <label style="padding-inline: 10px;">Movetime</label>
+                <input id="xhCtrlMovetime" type="number" onkeydown="return false" value="2" min="1" max="15" style="width: 50px;"
+                    onchange="NP_set_movetime(this.value)">
+                <label style="padding-inline: 10px;">Multipv</label>
+                <input id="xhCtrlMultipv" type="number" onkeydown="return false" value="1" min="1" max="20" style="width: 50px;"
+                    onchange="NP_set_multipv(this.value)">
+                <!-- <label style="padding-inline: 10px;">MyMove</label>
+                <input id="xhCtrlMymove" type="checkbox"
+                    onchange="NP_set_mymove(this.checked)"> -->
+                <button title="MyMove" onclick="NP_set_mymove()">MyMove</button>
+            </div>
+        </div>
+        <div style="width: 380px;"><textarea id="xhCtrlLogtext" disabled="true" rows="20"
+                style="width: 100%; margin-top: 10px;"></textarea></div>
+    </div>
+</body>
+
+</html>

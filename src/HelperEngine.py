@@ -28,6 +28,11 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
     def __init__(self) -> None:
         self.help = True
         self.debugDepth = 8
+
+        self.lastFenFull = ''
+        self.lastMoveFrom = None
+        self.engine = None
+
         self.guiOptions = dict(movetime=2, multipv=1)
         self.guiUpdateAction = queue.Queue()
 
@@ -60,31 +65,49 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
         except:
             pass
 
-    def restart(self, retry=5, isrestart=False):
-        self.stop_engine()
-        try:
-            # self.lastFen = ''
-            self.lastFenFull = ''
-            self.engine = Engine()
-            self.engine.add_event_listener(self)
+    def start_engine(self):
+        self.engine = Engine()
+        self.engine.add_event_listener(self)
+        self.engine.start()
+        self.send_msg('Engine started')
+
+    def start_monitor(self):
+        if self.monitor is None:
             self.monitor = BoardMonitor()
-            self.monitor.add_event_listener(self)
-            self.engine.start()
-            self.monitor.start()
-            self.send_msg('Engine started')
-            self.restartCount = 5
-        except Exception as e:
-            retry -= 1
-            if retry <= 0:
-                raise Exception('The engine cannot restart:', e)
-            self.restart(retry, isrestart)
+        self.monitor.add_event_listener(self)
+        self.monitor.start()
+        self.send_msg('Monitor started')
+
+    # def restart(self, retry=5, isrestart=False):
+    #     self.stop_engine()
+    #     try:
+    #         # self.lastFen = ''
+    #         self.lastFenFull = ''
+    #         self.engine = Engine()
+    #         self.engine.add_event_listener(self)
+    #         self.monitor = BoardMonitor()
+    #         self.monitor.add_event_listener(self)
+    #         self.engine.start()
+    #         self.monitor.start()
+    #         self.send_msg('Engine started')
+    #         self.restartCount = 5
+    #     except Exception as e:
+    #         retry -= 1
+    #         if retry <= 0:
+    #             raise Exception('The engine cannot restart:', e)
+    #         self.restart(retry, isrestart)
 
     def forceMySideMoveNext(self):
         self.lastFenFull = ''
         self.monitor.forceMyMoveNext = True
+        self.add_log('Forced my side move next')
+
+    def handle_guicmd(self, action: GUIActionCmd, params):
+        return False
 
     def send_guicmd(self, action: GUIActionCmd, params):
-        self.guiUpdateAction.put(GUIAction(action, params))
+        if not self.handle_guicmd(action, params):
+            self.guiUpdateAction.put(GUIAction(action, params))
 
     def execute_gui_cmd(self):
         while True:
@@ -102,13 +125,13 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
                     case GUIActionCmd.Message:
                         self.add_log(act.params)
                     case _:
-                        pass
+                        logger.error(f'** Unknown CMD {act}')
             except:
                 logger.warning(f'** Failed to updating GUI. {act}')
 
 
     # Monitor callback
-    def on_board_updated(self, fen: str, moveSide: Side, lastmovePosition):
+    def on_board_updated(self, fen: str, moveSide: Side, lastmovePosition, lastMoveFrom, forceMove=False):
         # if moveSide == Side.Unknow:
 
         #     if self.lastFen == fen:
@@ -118,16 +141,24 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
         #     #     logger.warning(f'Unkown move side. Assume not is me')
         #     #     moveSide = self.monitor.mySide
         # self.lastFen = fen
-        logger.info(f'board updated {moveSide} {fen}')
+        # logger.info(f'board updated {moveSide} {lastmovePosition} {fen}')
+
+        logger.info(f'updateboard {fen} {moveSide} {lastmovePosition} {lastMoveFrom} {forceMove}')
 
         if moveSide == Side.Unknow:
             self.send_guicmd(GUIActionCmd.Position, [self.monitor.positions, lastmovePosition, False])
 
+        elif (not forceMove and lastMoveFrom is not None and 
+                self.lastMoveFrom is not None and 
+                lastMoveFrom == self.lastMoveFrom):
+            logger.warning(f'Seem wrong detect on lastmove {lastMoveFrom} moveside={moveSide} {fen}')
         else:
+            self.lastMoveFrom = lastMoveFrom
+
             nextSide = moveSide.opponent
             fenfull = f'{fen} {nextSide.fen} - - 0 1'
 
-            if self.lastFenFull == fenfull:
+            if self.lastFenFull == fenfull and not forceMove:
                 return
 
             myturn = self.monitor.is_myside(nextSide)
@@ -167,7 +198,10 @@ class HelperEngine(EngineEventListener, BoardMonitorListener):
     def on_engine_fatal(self, msg):
         logger.error(f'Engine fatal: {msg}. Restarting')
         self.send_msg(f'Engine fatal, restarting...')
-        self.restart(isrestart=True)
+        self.start(restart=True)
+
+    def start(self, restart=False):
+        pass
 
     def update_position(self, positions, newturn):
         pass

@@ -18,14 +18,15 @@ LASTMOVE_THRESH = 0.7
 # PATTERN_PATH = './patterns'
 try:
     # PyInstaller creates a temp folder and stores path in _MEIPASS
-    PATTERN_PATH = f'{sys._MEIPASS}/patterns'
+    PATTERN_PATH = f'{sys._MEIPASS}/patterns/Ziga'
 except Exception:
-    PATTERN_PATH = './patterns'
+    PATTERN_PATH = './patterns/Ziga'
 
 GRID_WIDTH = 9
 GRID_HEIGHT = 10
 PIECE_NAME = 'King Advisor Elephant Rook Cannon Horse Pawn'.split()
 
+# Black -> lowercase
 PIECE_SYMBOL = {
     'King': 'K',
     'Advisor': 'A',
@@ -61,6 +62,28 @@ def load_img_mask(fileName):
     gray = load_gray(fileName)
     _, mask = cv2.threshold(gray,10,255,cv2.THRESH_BINARY)
     return gray, mask
+
+def find_circles(gray,
+                 param1=1, # 500
+                 param2=40, #smaller value-> more false circles
+                 minRadius=20, maxRadius=100):
+    minDist = minRadius*2
+    gray_blurred = cv2.blur(gray, (3, 3))
+    circles = cv2.HoughCircles(gray_blurred, cv2.HOUGH_GRADIENT, 1, minDist,
+                                       param1=param1, param2=param2, 
+                                       minRadius=minRadius, maxRadius=maxRadius)
+    if circles is None:
+        circles = []
+    else:
+        circles = np.uint16(np.around(circles[0,:]))
+    # debug only
+    print(f'found {len(circles)}')
+    output = gray.copy()
+    for i in circles:
+        cv2.circle(output, (i[0], i[1]), i[2], (0, 255, 0), 2)
+    showimg(output)
+    # ==
+    return circles
 
 def find_pattern_verbose(fileName, thresh=0.8):
     largeImg = cv2.imread(f'{PATTERN_PATH}/ex2.png')
@@ -206,18 +229,7 @@ class PiecePattern:
         self.gray = load_gray(self.fullName)
 
 class BoardMonitor:
-    playSize = get_imgsize('play_area')             # The captured image of playing field only. This is used to calculate the grid size
-    pieceSize = get_imgsize('BlackKing')            # Any image that have the size of piece to search
-    playStart = get_imgsize('corrner2playfield')    # To get the offset from where Border is detected, to the actual playing field
-    gridSize = np.divide(playSize, (GRID_WIDTH-1, GRID_HEIGHT-1))
-    
-    borderPatternGray, borderPatternMask = load_img_mask('border')  # The border pattern. Make sure that the tool can recognize this given any active possition
-                                                                    # NOTE: when the lastmove is in the conner, the lastmove indicator may "peek" into border pattern
-                                                                    #       make sure to mask it properly
-    borderSize = get_imgsize('border')
-    lastMovePatternGray, lastMovePatternMsk = load_img_mask('lastMove')
-
-    positions = None
+    positions = None # [ Y/row, X/col ]
     piecePatterns: Dict[str, PiecePattern] = {}
 
     idleCnt = {}
@@ -226,7 +238,8 @@ class BoardMonitor:
 
     mySide = Side.White
     lastMoveSide = Side.Unknow
-    lastMovePosition = None
+    lastMovePosition = None  # [X/column, Y/row]
+    lastMoveFrom = None
     forceMyMoveNext = False
 
     eventListeners: List[BoardMonitorListener] = []
@@ -238,7 +251,21 @@ class BoardMonitor:
     
 
     def __init__(self) -> None:
+        self.do_init()
         self.clear_board()
+
+    def do_init(self):
+        self.playSize = get_imgsize('play_area')             # The captured image of playing field only. This is used to calculate the grid size
+        self.pieceSize = get_imgsize('BlackKing')            # Any image that have the size of piece to search
+        self.playStart = get_imgsize('corrner2playfield')    # To get the offset from where Border is detected, to the actual playing field
+        self.gridSize = np.divide(self.playSize, (GRID_WIDTH-1, GRID_HEIGHT-1))
+        
+        self.borderPatternGray, self.borderPatternMask = load_img_mask('border')  # The border pattern. Make sure that the tool can recognize this given any active possition
+                                                                        # NOTE: when the lastmove is in the conner, the lastmove indicator may "peek" into border pattern
+                                                                        #       make sure to mask it properly
+        self.borderSize = get_imgsize('border')
+        self.lastMovePatternGray, self.lastMovePatternMsk = load_img_mask('lastMove')
+
         for side in [Side.Black, Side.White]:
             for name in PIECE_NAME:
                 p = PiecePattern(side,name)
@@ -256,6 +283,8 @@ class BoardMonitor:
 
     def clear_board(self):
         self.positions = [['.' for i in range(GRID_WIDTH)] for j in range(GRID_HEIGHT)] # It's [Y,X] in this array
+        self.lastMovePosition = None
+        self.moveSide = Side.Unknow
 
     def crop_image(self, board_gray):
         # board_gray = cv2.cvtColor(board_color, cv2.COLOR_BGR2GRAY)
@@ -311,18 +340,22 @@ class BoardMonitor:
         if (self.idleCnt[msg] > 10):
             self.idleCnt[msg] = 0
 
-    def send_board_update_event(self, fen: str, moveSide: Side):
+    def send_board_update_event(self):
+        fen = self.get_fen()
+        moveSide = self.moveSide
         if moveSide == Side.Unknow and self.forceMyMoveNext:
             moveSide = self.mySide.opponent
             logger.warning(f'Force moveside {moveSide}')
         if self.forceMyMoveNext or fen != self.lastBoardStr or moveSide != self.lastMoveSide:
+            # logger.info(f'Board updated my={self.mySide} move={moveSide} {self.lastMovePosition} {fen}')
             for l in self.eventListeners:
-                l.on_board_updated(fen, moveSide, self.lastMovePosition)
+                l.on_board_updated(fen, moveSide, self.lastMovePosition, self.lastMoveFrom, self.forceMyMoveNext)
         self.forceMyMoveNext = False
         self.lastBoardStr = fen
         self.lastMoveSide = moveSide
 
     def send_board_fatal(self, type: MonitorFatal):
+        self.lastBoardStr = ''
         try:
             self.fatalCnt[type] += 1
         except KeyError:
@@ -340,12 +373,10 @@ class BoardMonitor:
         if board is None:
             # self.send_msg("** Error : No Board found.")
             self.send_board_fatal(MonitorFatal.NoBoardFound)
-            self.lastBoardStr = ''
             return
         self.fatalCnt[MonitorFatal.NoBoardFound] = 0
 
         self.lastMovePosition = self.scan_lastmove(board)
-        moveSide = Side.Unknow
         kingPos = {Side.Black: None, Side.White: None}
 
         for row in range(GRID_HEIGHT):
@@ -359,7 +390,7 @@ class BoardMonitor:
                     if len(res) > 0:
                         # found here
                         if np.array_equal(self.lastMovePosition, (col,row)):
-                            moveSide = piece.side
+                            self.moveSide = piece.side
                         curp = self.positions[row][col]
                         if (curp != '.'):
                             logger.warning(f'Duplicated piece found at {row}:{col} {curp} -> {piece.symbol}')
@@ -377,7 +408,7 @@ class BoardMonitor:
         #     self.send_msg(f'** Error: move side unkown, assum my side move')
         #     self.lastMoveSide = self.mySide
 
-        self.send_board_update_event(self.get_fen(), moveSide)
+        
 
 
     # def scan_image_full(self, board_gray):
@@ -456,25 +487,31 @@ class BoardMonitor:
         else:
             return [ [sx-1, GRID_HEIGHT-sy], [ex-1, GRID_HEIGHT-ey] ]
 
-    def screen_check(self):
-        # start = timer()
-        img = screen_cap(self.lastScanRegion)
-        self.scan_image(img)
-        # end = timer()
-        # logger.info(end-start)
+    # return 0 if success, other to terminate the monitor
+    def do_board_scan(self):
+        try:
+            # start = timer()
+            img = screen_cap(self.lastScanRegion)
+            self.scan_image(img)
+            # end = timer()
+            # logger.info(end-start)
+            return 0
+        except Exception as e:
+            logger.warning(f'Board scan failed {e}')
+            return 1
 
     def start(self, delaySecond=0.1):
+    # def start(self, delaySecond=3):
         self.stop()
 
         def polling():
             import time
             logger.info('ScreenMonitor started')
             while not self.stopPolling:
-                try:
-                    self.screen_check()
-                except Exception as e:
-                    logger.warning(f'screen check failed {e.args}')
+                if self.do_board_scan():
                     break
+                else:
+                    self.send_board_update_event()
                 time.sleep(delaySecond)
             self.pollingStopped.set()
             self.engine_thread = None

@@ -341,18 +341,21 @@ class Engine():
     def start_cmd_handler(self):
         def fen_execute():
             for cmd in self.wait_next_cmd():
-                match cmd.action:
-                    case EngineCmdType.SetFen:
-                        self.set_fen(cmd.params)
-                    case EngineCmdType.SetMovetime:
-                        self.uci_movetime = int(cmd.params)*1000
-                        logger.info(f'[Engine] set movetime = {self.uci_movetime}')
-                    case EngineCmdType.SetMultipv:
-                        self.uci_multipv = cmd.params
-                        self.write_nolock(f'setoption name MultiPV value {self.uci_multipv}\n')
-                        logger.info(f'[Engine] set multipv = {self.uci_multipv}')
-                    case _:
-                        logger.warning(f'unknow cmd {cmd.action}')
+                try:
+                    match cmd.action:
+                        case EngineCmdType.SetFen:
+                            self.set_fen(cmd.params)
+                        case EngineCmdType.SetMovetime:
+                            self.uci_movetime = int(cmd.params)*1000
+                            logger.info(f'[Engine] set movetime = {self.uci_movetime}')
+                        case EngineCmdType.SetMultipv:
+                            self.uci_multipv = cmd.params
+                            self.write_nolock(f'setoption name MultiPV value {self.uci_multipv}\n')
+                            logger.info(f'[Engine] set multipv = {self.uci_multipv}')
+                        case _:
+                            logger.warning(f'unknow cmd {cmd.action}')
+                except Exception as e:
+                    logger.error(f'Error during process CMD: {cmd.action} {cmd.params}\n{e}')
 
         threading.Thread(target=fen_execute, daemon=True).start()
 

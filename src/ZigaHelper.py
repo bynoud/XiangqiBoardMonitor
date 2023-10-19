@@ -131,13 +131,13 @@ class ZigaHelper(HelperEngine):
         try:
             self.driver.execute_script(src, *param)
         except Exception as e:
-            logger.warning(f'Error during execute script: {src[:80]}...: {e.args}')
+            logger.warning(f'Error during execute script: {src[:80]}...: {e}')
 
     def exe_js_func(self, jsfunc: JsFunc, param={}):
         try:
             self.driver.execute_script(f'{self.js_vars}\n{jsfunc.value}({param})')
         except Exception as e:
-            logger.warning(f'Error during execute func: {jsfunc} {param}...: {e.args}')
+            logger.warning(f'Error during execute func: {jsfunc} {param}...: {e}')
 
     def test(self):
         options = webdriver.ChromeOptions()
