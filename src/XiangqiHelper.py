@@ -11,8 +11,9 @@ from enum import StrEnum
 
 import gvars
 
-from HelperEngine import HelperEngine, MonitorFatal, GUIActionCmd
+from HelperEngine import HelperEngine, GUIActionCmd
 from UI.ControlUI import ControlUI
+from BoardMonitor.XqchessMonitor import XqchessMonitor, MonitorResult
 
 # MYDEBUG = True
 
@@ -100,90 +101,10 @@ class TestME:
         self.ctrlUI = ControlUI()
 
 
-import xml.etree.ElementTree as ET
-NameMap = {
-    'chariot': 'R',
-    'cannon': 'C',
-    'horse': 'N',
-    'king': 'K',
-    'adviser': 'A',
-    'elephant': 'B',
-    'pawn': 'P',
-}
-
-from BoardMonitor import BoardMonitor, Side, MonitorFatal
-class MyMonitor(BoardMonitor):
-    def __init__(self, wdriver):
-        super().__init__()
-        self.driver = wdriver
-
-    def do_init(self):
-        pass
-
-    def do_board_scan(self):
-        try:
-            self.html_scrapping()
-        except Exception as e:
-            # print(f'scrapping failed {e}')
-            self.send_board_fatal(MonitorFatal.NoBoardFound)
-        # self.html_scrapping()
-        return 0 # FIXME : no reason to kill the monitor yet...
-
-    def html_scrapping(self):
-
-        self.clear_board()
-
-        kingPos = {Side.Black: None, Side.White: None}
-
-        tree = ET.fromstring(
-            self.driver.find_element(By.CLASS_NAME, 'xq-board-wrap').get_attribute('innerHTML'))
-
-        # print(f'me {tree.attrib}')
-        def get_position(attr):
-            for cn in attr:
-                if cn[0] == 'p':
-                    return [int(cn[1]), int(cn[2])]
-            return [0,0]
-        def get_piece(cls):
-            a = cls.split()
-            piece = ''
-            for name in NameMap:
-                if name in a:
-                    piece = NameMap[name]
-                    break
-            if 'black' in a:
-                return (Side.Black, piece.lower())
-            else:
-                return (Side.White, piece)
-
-
-        for node in tree:
-            attr = node.attrib['class'].split()
-            if 'occupied' in attr:
-                # print(f'check here {attr}')
-                mypos = get_position(attr)
-                side, piece = get_piece(node[0].attrib['class'])
-
-                if piece in ('K','k'):
-                    kingPos[side] = mypos
-
-                if 'last-move' in attr:
-                    self.lastMovePosition = [mypos[1], mypos[0]]
-                    self.moveSide = side
-                self.positions[mypos[0]][mypos[1]] = piece
-            
-            elif 'last-move' in attr:
-                self.lastMoveFrom = get_position(attr)
-
-        if kingPos[Side.Black] is None or kingPos[Side.White] is None:
-            # logger.warning(f'KING is not found in both sides')
-            return
-        self.mySide = Side.White if kingPos[Side.White][0] > kingPos[Side.Black][0] else Side.Black
-
 
 class Helper(HelperEngine):
     def __init__(self, url='https://xqchess.com/', headless=False) -> None:
-        super().__init__()
+        super().__init__(MonitorCls=XqchessMonitor)
         self.url = url
         self.logs = []
         self.logDepth = 500
@@ -198,14 +119,13 @@ class Helper(HelperEngine):
         self.ctrlUI.on_multipv_changed(lambda x: self.set_option('multipv',x))
         self.ctrlUI.on_mymove(self.forceMySideMoveNext)
 
-    def start(self, restart=False):
-        if self.url != '':
-            if not restart:
-                self.start_page()
-            self.monitor = MyMonitor(self.driver)
-            self.start_monitor()
-        self.start_engine()
-        self.ctrlUI.start()
+    def start(self, restart=False, mon_params=None):
+        if not restart:
+            self.start_page()
+        mon_params = {**(mon_params or {}), 'wdriver':self.driver}
+        super().start(restart=restart, mon_params=mon_params)
+        if not restart:
+            self.ctrlUI.start()
 
     def start_page(self, reload=False):
         if not reload:
@@ -239,59 +159,27 @@ class Helper(HelperEngine):
             logger.info('** Reloading')
             self.driver.get(self.url)
 
-    def stop(self):
-        # pickle.dump(self.driver.get_cookies(), open(COOKIE_FILE, "wb"))
-        logger.warning('GUI Exitting')
-        self.stop_engine()
-
-    # don't need a loop, handle event from monitor directly
-    def handle_guicmd(self, action: GUIActionCmd, params):
-        try:
-            match action:
-                case GUIActionCmd.Position:
-                    self.update_position(params[0], params[1], params[2])
-                case GUIActionCmd.Moves:
-                    self.update_movelist(params)
-                case GUIActionCmd.Message:
-                    self.ctrlUI.add_log(params)
-                case _:
-                    logger.error(f'** Unknown CMD {action}')
-        except:
-            logger.warning(f'** Failed to updating GUI. {action} {params}')
-        return True
-
-    # @property
-    # def is_stopped(self):
-    #     try:
-    #         if len(self.driver.window_handles) == 0:
-    #             return True
-    #         else:
-    #             return False
-    #     except WebDriverException:
-    #         return True
-        
-
-    def on_monitor_fatal(self, type: MonitorFatal):
-        match type:
-            case MonitorFatal.NoBoardFound:
-                self.ctrlUI.popup_msg('No Board detected')
-            case _:
-                logger.warning(f'** Error: Unknown fatal {type}')
-
     def update_gui(self):
+        r = self.lastMonitor
         self.ctrlUI.popup_msg('')
-        self.ctrlUI.update_position(self.lastPosition, self.lastmove, self.lastMovelist)
+        self.ctrlUI.update_position(r.positions, r.lastMovePosition, self.lastMovelist)
 
-    def update_position(self, positions, lastmove, newturn):
-        self.lastPosition = positions
-        self.lastmove = [] if lastmove is None else [lastmove[0],lastmove[1]]
-        if newturn:
-            self.lastMovelist = [] # clear movelist in new turn
-        self.update_gui()
+    # def update_position(self, result: MonitorResult):
+    #     self.lastPosition = positions
+    #     self.lastmove = [] if lastmove is None else [lastmove[0],lastmove[1]]
+    #     if newturn:
+    #         self.lastMovelist = [] # clear movelist in new turn
+    #     self.update_gui()
 
-    def update_movelist(self, movelist):
-        self.lastMovelist = movelist
-        self.update_gui()
+    # def update_movelist(self, movelist):
+    #     self.lastMovelist = movelist
+    #     self.update_gui()
+
+    def add_log(self, msg):
+        self.ctrlUI.add_log(msg)
+    
+    def set_fatal(self, msg):
+        self.ctrlUI.popup_msg(msg)
 
 
     ### callback from control UI
