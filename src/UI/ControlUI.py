@@ -1,9 +1,13 @@
 import Neutron
 import ctypes
-import os, time
+import logging
 
 import cv2
 import numpy as np
+
+import gvars
+
+logger = logging.getLogger()
 
 GRID_WIDTH = 9
 GRID_HEIGHT = 10
@@ -56,12 +60,11 @@ class ControlUI:
             maxRadius = 50
         )
 
-        self.logs = []
-        self.logDepth = 50
         self.lastpopup = ''
         self.positions = None
         self.lastmove = None
         self.movelist = None
+        self.logs = []
 
         self.loaded = False
         self.win.onloaded = self.onloaded
@@ -78,16 +81,23 @@ class ControlUI:
         )
 
     def onloaded(self):
-        print("ControlUI loaded")
+        logger.info("ControlUI loaded")
         self.loaded = True
         self.setup_init()
         self.refresh()
 
+    def calljs(self, fn, params):
+        try:
+            self.win.calljs(fn, params)
+        except Exception as e:
+            logger.error(f'calljs failed: {e}')
+
+
     def setup_init(self):
         # self.setupImgPath = ''
         self.setupImg = cv2.imread(f'UI/b.png', 0)
-        self.win.calljs('setupInit', self.setupConfig)
-        self.win.calljs('setupImage', dict(
+        self.calljs('setupInit', self.setupConfig)
+        self.calljs('setupImage', dict(
             path='UI/b.png',
             circles=self.setup_value_changed()))
         # self.win.calljs('drawSetupImage', self.setup_value_changed())
@@ -136,22 +146,24 @@ class ControlUI:
         self.listener.on_refresh_clicked()
 
     def start(self):
+        if self.win.running:
+            return
         self.win.show()
 
     def refresh(self):
         if not self.win.running:
             return
-        self.win.calljs('show_popup', dict(message=self.lastpopup))
-        self.win.calljs('update_position', dict(positions=self.positions, 
+        self.calljs('show_popup', dict(message=self.lastpopup))
+        self.calljs('update_position', dict(positions=self.positions, 
                                 lastmove=self.lastmove, 
                                 movelist=self.movelist))
-        self.win.calljs('set_log', self.logs)
+        self.calljs('set_log', self.logs)
 
     def popup_msg(self, msg):
         self.lastpopup = msg
         if not self.win.running:
             return
-        self.win.calljs('show_popup', dict(message=msg))
+        self.calljs('show_popup', dict(message=msg))
 
     def update_position(self, positions, lastmove, movelist):
         self.positions = positions
@@ -159,22 +171,21 @@ class ControlUI:
         self.movelist = movelist
         if not self.win.running:
             return
-        self.win.calljs('update_position', dict(positions=positions, 
+        self.calljs('update_position', dict(positions=positions, 
                                 lastmove=lastmove, 
                                 movelist=movelist))
 
-    def add_log(self, msg):
-        self.logs.append(msg)
-        self.logs = self.logs[-self.logDepth:]
+    def set_log(self, logs):
+        self.logs = logs
         if not self.win.running:
             return
-        self.win.calljs('set_log', self.logs)
+        self.calljs('set_log', self.logs)
 
     def py_hi(self, msg):
         print(f'py_hi {msg}')
         # win.webview.evaluate_js('callme("frompy")')
         # win.calljs('callme', 'frompy')
-        self.win.calljs('update_position', dict(positions=positions, 
+        self.calljs('update_position', dict(positions=positions, 
                                 lastmove=[], 
                                 movelist=[]))
         

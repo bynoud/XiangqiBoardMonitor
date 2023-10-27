@@ -15,8 +15,8 @@ var ID_CONTROL_MYMOVE = 'xhCtrlMymove';
 var ID_CONTROL_LOGTEXT = 'xhCtrlLogtext';
 var ID_CONTROL_POPUPTEXT = 'xgPopupText';
 
-var gridSize = 40;
-var padding = 30;
+var gridSize = 30;
+var padding = 20;
 var gridLineWidth = 2;
 var gridLineColor = 'black';
 
@@ -171,7 +171,7 @@ function draw_piece(ctx, rad, sym, x, y) {
     ctx.arc(cx, cy, rad, 0, 2*Math.PI, false);
     ctx.fillStyle = black ? '#085f63' : '#ff5959' ;
     ctx.fill();
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 1;
     ctx.strokeStyle = '#0e2431';
     ctx.stroke();
 

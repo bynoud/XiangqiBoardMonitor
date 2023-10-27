@@ -15,33 +15,6 @@ from HelperEngine import HelperEngine, GUIActionCmd
 from UI.ControlUI import ControlUI
 from BoardMonitor.XqchessMonitor import XqchessMonitor, MonitorResult
 
-# MYDEBUG = True
-
-# # arguments & logging
-# parser = argparse.ArgumentParser()
-# parser.add_argument( '-log',
-#                      '--loglevel',
-#                      default='error',
-#                      help='Provide logging level. Example --loglevel debug, default=warning' )
-
-# args = parser.parse_args()
-# loglevel = 'INFO' if MYDEBUG else args.loglevel.upper()
-
-
-# logger = logging.getLogger()
-# logger.setLevel(logging.INFO)
-
-# logFormatter = logging.Formatter('%(module)-20s: %(message)s')
-
-# stream_handler = logging.StreamHandler()
-# stream_handler.setLevel(loglevel)
-# stream_handler.setFormatter(logFormatter)
-# logger.addHandler(stream_handler)
-
-
-# fileHandler = logging.FileHandler('helper.log', mode='w')
-# fileHandler.setFormatter(logFormatter)
-# logger.addHandler(fileHandler)
 logger = logging.getLogger()
 
 ##################
@@ -104,14 +77,8 @@ class TestME:
 
 class Helper(HelperEngine):
     def __init__(self, url='https://xqchess.com/', headless=False) -> None:
-        super().__init__(MonitorCls=XqchessMonitor)
-        self.url = url
-        self.logs = []
-        self.logDepth = 500
-        self.headless = headless
-        self.lastPosition = None
-        self.lastmove = []
-        self.lastMovelist = []
+        super().__init__(url=url, headless=headless,
+                         MonitorCls=XqchessMonitor)
 
         self.ctrlUI = ControlUI()
         self.ctrlUI.listener = self
@@ -119,45 +86,47 @@ class Helper(HelperEngine):
         self.ctrlUI.on_multipv_changed(lambda x: self.set_option('multipv',x))
         self.ctrlUI.on_mymove(self.forceMySideMoveNext)
 
-    def start(self, restart=False, mon_params=None):
-        if not restart:
-            self.start_page()
+    def start_background(self, mon_params=None):
         mon_params = {**(mon_params or {}), 'wdriver':self.driver}
-        super().start(restart=restart, mon_params=mon_params)
-        if not restart:
-            self.ctrlUI.start()
+        super().start_background(mon_params=mon_params)
 
-    def start_page(self, reload=False):
-        if not reload:
-            logger.info(f'** Web starting headless={self.headless} url={self.url}...')
-            try:
-                self.driver.close()
-                logger.info(f'Web closed for reload')
-            except:
-                pass
-            try:
-                # userdir = tempfile.mkdtemp()
-                userdir = f'{pathlib.Path().absolute()}\\browser_cache'
-                logger.info(f'browser dir {userdir}')
-                options = webdriver.ChromeOptions()
-                options.add_argument(f"user-data-dir={userdir}")
-                if self.headless:
-                    options.add_argument('--headless=new')
-                    options.add_argument('--disable-gpu')
-                else:
-                    options.add_experimental_option('excludeSwitches', ['enable-logging']) #
-                    options.add_argument(f"--app={self.url}")
-                    options.add_argument('--enable-extensions')
-                service = Service()
-                service.creation_flags |= subprocess.CREATE_NO_WINDOW # This is needed when use pyinstaller --nowindowed build
-                self.driver = webdriver.Chrome(options=options, service=service)
-                if self.headless:
-                    self.driver.get(self.url)
-            except NoSuchWindowException:
-                logger.fatal(f'cannot go to internet')
-        else:
-            logger.info('** Reloading')
-            self.driver.get(self.url)
+    def mainloop(self):
+        self.start_page()
+        self.start_background()
+        self.ctrlUI.start()
+        self.stop_background(all=True)
+
+    # def start_page(self):
+    #     logger.info(f'** Web starting headless={self.headless} url={self.url}...')
+
+    #     # try:
+    #     #     self.driver.quit()
+    #     #     logger.info(f'Web closed for reload')
+    #     # except:
+    #     #     pass
+
+    #     try:
+    #         # userdir = tempfile.mkdtemp()
+    #         userdir = f'{pathlib.Path().absolute()}\\browser_cache'
+    #         logger.info(f'browser dir {userdir}')
+    #         options = webdriver.ChromeOptions()
+    #         options.add_argument(f"user-data-dir={userdir}")
+    #         if self.headless:
+    #             options.add_argument('--headless=new')
+    #             options.add_argument('--disable-gpu')
+    #         else:
+    #             options.add_experimental_option('excludeSwitches', ['enable-logging']) #
+    #             options.add_argument(f"--app={self.url}")
+    #             options.add_argument('--enable-extensions')
+    #         service = Service()
+    #         service.creation_flags |= subprocess.CREATE_NO_WINDOW # This is needed when use pyinstaller --nowindowed build
+    #         self.driver = webdriver.Chrome(options=options, service=service)
+    #         if self.headless:
+    #             self.driver.get(self.url)
+    #     except NoSuchWindowException:
+    #         logger.fatal(f'cannot go to internet')
+
+
 
     def update_gui(self):
         r = self.lastMonitor
@@ -175,21 +144,29 @@ class Helper(HelperEngine):
     #     self.lastMovelist = movelist
     #     self.update_gui()
 
-    def add_log(self, msg):
-        self.ctrlUI.add_log(msg)
+    def set_log(self, logs):
+        try:
+            self.ctrlUI.set_log(logs)
+        except AttributeError:
+            pass
     
     def set_fatal(self, msg):
-        self.ctrlUI.popup_msg(msg)
+        try:
+            self.ctrlUI.popup_msg(msg)
+        except AttributeError:
+            pass
 
 
     ### callback from control UI
     def on_refresh_clicked(self):
-        self.start_page(reload=True)
+        self.stop_background()
+        self.reload_page()
+        self.start_background()
 
 
 if __name__ == "__main__":
     x = Helper()
-    x.start()
+    x.mainloop()
     print('cleanup here')
     gvars.cleanup()
     sys.exit()

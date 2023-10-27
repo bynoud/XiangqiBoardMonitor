@@ -1,8 +1,11 @@
 # import tkinter as tk
 # import tkinter.scrolledtext as tkst
-import queue, logging
+import queue, logging, pathlib, subprocess
 from enum import Enum
 from abc import ABC, abstractmethod
+from selenium.common.exceptions import NoSuchWindowException
+from selenium.webdriver.chrome.service import Service
+from selenium import webdriver
 
 from EngineUCI import Engine, EngineEventListener, Move
 from BoardMonitor.BaseMonitor import *
@@ -23,7 +26,7 @@ class GUIAction:
 
 class LogAggregate:
     idleCnt = {}
-    aggCnt = 40
+    aggCnt = 600
 
     # True if message should print out
     def send_msg(self, msg):
@@ -50,11 +53,17 @@ def move_parse(side: Side, mv):
 
 class HelperEngine(EngineEventListener, BoardMonitorListener, ABC):
 
-    def __init__(self, MonitorCls = BaseMonitor) -> None:
+    def __init__(self, url='https://xqchess.com/', headless=False,
+                 MonitorCls = BaseMonitor) -> None:
         self.MonitorCls = MonitorCls
+        self.url = url
+        self.headless = headless
 
         self.help = True
         self.debugDepth = 8
+
+        self.logs = []
+        self.logDepth = 30
 
         self.lastFenFull = ''
         self.mySideMoveNext = False
@@ -67,6 +76,9 @@ class HelperEngine(EngineEventListener, BoardMonitorListener, ABC):
         self.guiOptions = dict(movetime=2, multipv=1)
         # self.guiUpdateAction = queue.Queue()
         self.logagg = LogAggregate()
+
+        # self.start_page()
+        # self.start()
 
     def set_option(self, name, value):
         if name not in self.guiOptions:
@@ -82,7 +94,7 @@ class HelperEngine(EngineEventListener, BoardMonitorListener, ABC):
                 case _:
                     logging.warning(f'Unknow option {name}')
 
-    def stop(self):
+    def stop_background(self, all=False):
         try:
             self.engine.quit()
             logger.info('Engine stopped')
@@ -94,19 +106,59 @@ class HelperEngine(EngineEventListener, BoardMonitorListener, ABC):
         except:
             pass
 
-    def start(self, restart=False, mon_params=None):
-        self.stop()
-        print('staring...')
+        if all:
+            try:
+                self.driver.quit()
+                logger.info('Page stoped')
+            except:
+                pass
 
+    def start_background(self, mon_params=None):
+        # self.stop(engine_only=engine_only, monitor_only=monitor_only)
         self.engine = Engine()
         self.engine.add_event_listener(self)
         self.engine.start()
         self.add_log('Engine started')
-
         self.monitor = self.MonitorCls()
         self.monitor.add_event_listener(self)
         self.monitor.start(mon_params)
         self.add_log('Monitor started')
+
+
+    def start_page(self):
+        logger.info(f'** Web starting headless={self.headless} url={self.url}...')
+
+        try:
+            # userdir = tempfile.mkdtemp()
+            userdir = f'{pathlib.Path().absolute()}\\browser_cache'
+            logger.info(f'browser dir {userdir}')
+            options = webdriver.ChromeOptions()
+            options.add_argument(f"user-data-dir={userdir}")
+            if self.headless:
+                options.add_argument('--headless=new')
+                options.add_argument('--disable-gpu')
+            else:
+                options.add_experimental_option('excludeSwitches', ['enable-logging']) #
+                options.add_argument(f"--app={self.url}")
+                options.add_argument('--enable-extensions')
+            service = Service()
+            service.creation_flags |= subprocess.CREATE_NO_WINDOW # This is needed when use pyinstaller --nowindowed build
+            self.driver = webdriver.Chrome(options=options, service=service)
+            if self.headless:
+                self.driver.get(self.url)
+        # except NoSuchWindowException:
+        except Exception as e:
+            logger.fatal(f'cannot go to internet: {e}')
+
+    def reload_page(self):
+        try:
+            self.driver.get(self.url)
+            logger.info(f'Page reloaded')
+        except:
+            self.driver.quit()
+            # self.driver.get(self.url)
+            self.start_page()
+            logger.info(f'Page re-opened')
 
     def forceMySideMoveNext(self):
         self.lastFenFull = ''
@@ -236,7 +288,8 @@ class HelperEngine(EngineEventListener, BoardMonitorListener, ABC):
     def on_engine_fatal(self, msg):
         logger.error(f'Engine fatal: {msg}. Restarting')
         self.add_log(f'Engine fatal, restarting...')
-        self.start(restart=True)
+        self.stop_background()
+        self.start_background()
 
     # @abstractmethod
     # def update_position(self, result: MonitorResult):
@@ -251,8 +304,13 @@ class HelperEngine(EngineEventListener, BoardMonitorListener, ABC):
         pass
 
     @abstractmethod
-    def add_log(self, msg):
+    def set_log(self, logs):
         pass
+
+    def add_log(self, msg):
+        self.logs.append(msg)
+        self.logs = self.logs[-self.logDepth:]
+        self.set_log(self.logs)
 
     @abstractmethod
     def set_fatal(self, msg):
