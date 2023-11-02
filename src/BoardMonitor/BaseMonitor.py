@@ -94,8 +94,8 @@ def board_str(r: MonitorResult):
 class MonitorResult:
 
     def __init__(self) -> None:
-        self.mySide = Side.Unknow
-        self.moveSide = Side.Unknow
+        self.mySide: Side = Side.Unknow
+        self.moveSide: Side = Side.Unknow
         self.positions = [['.' for i in range(GRID_WIDTH)] for j in range(GRID_HEIGHT)] # [ Y/row, X/col ]
         self.lastMovePosition = [] # [X/column, Y/row]
         self.lastMoveFrom = [] # [X/column, Y/row]

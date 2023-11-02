@@ -228,7 +228,8 @@ class HelperEngine(EngineEventListener, BoardMonitorListener, ABC):
     def on_board_updated(self, result: MonitorResult):
         # logger.info(f'updateboard {fen} {moveSide} {lastmovePosition} {lastMoveFrom} {forceMove}')
         if self.mySideMoveNext:
-            result.moveSide = result.mySide
+            self.mySideMoveNext = False
+            result.moveSide = result.mySide.opponent
             self.lastMonitor = MonitorResult()
 
         if self.lastMonitor.isSame(result):
